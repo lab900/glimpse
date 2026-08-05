@@ -620,12 +620,16 @@ function renderSideQueries(spans) {
   }
   const list = Object.entries(groups).sort((a, b) => b[1].count - a[1].count);
   if (!list.length) return;
-  $("side-queries").innerHTML = list.map(([sql, g]) =>
+  $("side-queries").innerHTML = list.map(([sql, g], i) =>
     `<div class="qrow ${g.count >= 5 ? "hot" : ""}">
-      <div class="qmeta">${g.count}× · ${fmtMs(g.totalMs)}${g.count >= 5 ? " · N+1?" : ""}</div>
+      <div class="qhead">
+        <span class="qmeta">${g.count}× · ${fmtMs(g.totalMs)}${g.count >= 5 ? " · N+1?" : ""}</span>
+        ${explainLink(i)}
+      </div>
       ${sqlBlock(sql)}
     </div>`).join("");
   initSqlClamps($("side-queries"));
+  attachExplain($("side-queries"), list.map(([sql]) => sql));
 }
 
 function copyButton(btn, getText) {
@@ -642,7 +646,11 @@ function copyButton(btn, getText) {
 }
 
 async function loadTracePage(traceId) {
-  const data = await get("/api/traces/" + traceId);
+  const [data, stats] = await Promise.all([
+    get("/api/traces/" + traceId),
+    get("/api/stats"),
+  ]);
+  plansOn = stats.mssql_plans;
   const spans = data.spans;
   trace.id = data.trace_id;
   trace.spans = spans;
