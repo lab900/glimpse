@@ -23,6 +23,20 @@ The binary migrates its own database on startup. Everything runs on one port:
 Environment variables: `PORT` (default 4318), `DB_PATH` (default
 `./data/glimpse.db`), `RETENTION_HOURS` (default 24, old spans are purged).
 
+All variables can also live in a `.env` file next to the binary (see
+`.env.example`). Real environment variables win over `.env`, and `.env` is
+gitignored.
+
+### MSSQL execution plans (optional)
+
+Set `GLIMPSE_MSSQL_DSN` to a SQL Server connection string, e.g.
+`sqlserver://sa:PASSWORD@127.0.0.1:1433`. Slow-query and N+1 entries then get
+an **explain** button: glimpse reads the plan cache DMVs (read-only, needs
+`VIEW SERVER STATE`) and shows missing-index suggestions with ready-to-run
+DDL, plan warnings, operator counts, and real execution stats. The API is
+`POST /api/queryplan` with `{"statement": "..."}`. glimpse never executes
+captured SQL against your database.
+
 ## Attach a Spring Boot app
 
 Download the [OpenTelemetry Java agent](https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
+	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 
@@ -25,6 +26,11 @@ import (
 var uiFS embed.FS
 
 func main() {
+	// Optional .env in the working directory; real env vars win over it.
+	if err := godotenv.Load(); err == nil {
+		log.Printf("loaded .env")
+	}
+
 	dbPath := envOr("DB_PATH", "./data/glimpse.db")
 	port := envOr("PORT", "4318")
 	retentionHours := envIntOr("RETENTION_HOURS", 24)
@@ -70,12 +76,25 @@ func main() {
 	// OTLP/HTTP ingest — the standard path the OpenTelemetry agents use.
 	router.HandleFunc("POST /v1/traces", handleOTLPTraces(database, queries))
 
+	var mssql *sql.DB
+	if dsn := os.Getenv("GLIMPSE_MSSQL_DSN"); dsn != "" {
+		mssql, err = sql.Open("sqlserver", dsn)
+		if err != nil {
+			log.Fatalf("bad GLIMPSE_MSSQL_DSN: %v", err)
+		}
+		plansEnabled = true
+	}
+
 	config := huma.DefaultConfig("glimpse", "1.0.0")
 	config.Info.Description = "Tiny trace collector with code insights. " +
 		"Point an OpenTelemetry agent at POST /v1/traces (OTLP/HTTP), " +
 		"then read /api/endpoints, /api/insights, /api/traces."
 	api := humago.New(router, config)
 	registerAPI(api, queries)
+	if mssql != nil {
+		registerPlanAPI(api, mssql)
+		log.Printf("  MSSQL execution plans enabled")
+	}
 
 	router.HandleFunc("GET /api/traces/{traceId}/digest", handleTraceDigest(queries))
 

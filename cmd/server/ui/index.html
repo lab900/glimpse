@@ -139,6 +139,9 @@
   a.more { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--ink-2); cursor: pointer; }
   a.more::before { content: "▸ "; color: var(--accent); }
   a.more:hover { background: var(--ink); color: var(--page); }
+  .plan { margin-top: 8px; border-top: 1px dashed var(--grid); padding-top: 8px; white-space: normal; }
+  .plan .qmeta { margin-bottom: 4px; }
+  .plan button { margin-top: 6px; font-size: 11px; padding: 2px 8px; }
 
   /* ---- waterfall ---- */
   .wf { min-width: 600px; }
@@ -371,6 +374,54 @@ function rows(table, head, items, render, emptyMsg) {
 /* ============ index page ============ */
 
 let currentEndpoint = "";
+let plansOn = false;
+
+const explainLink = i => plansOn ? `<a class="back cta explain" data-x="${i}">explain</a>` : "";
+
+function renderPlan(p) {
+  if (!p.found) return `<div class="empty">${esc(p.reason || p.detail || "no plan found")}</div>`;
+  let h = `<div class="qmeta">plan cache: ${p.execution_count} executions · avg ${fmtMs(p.avg_elapsed_ms)}
+    · ${(p.avg_logical_reads ?? 0).toLocaleString()} pages read/exec</div>`;
+  for (const m of p.missing_indexes) {
+    h += `<div><span class="err">missing index</span> on ${esc(m.table)}
+      · predicted ${m.impact_pct.toFixed(0)}% cheaper
+      <pre class="sql">${esc(m.ddl)}</pre></div>`;
+  }
+  if (p.warnings.length) h += `<div class="qmeta err">warnings: ${p.warnings.map(esc).join(", ")}</div>`;
+  if (p.operators.length) {
+    h += `<div class="qmeta">${[...p.operators].sort((a, b) => b.count - a.count)
+      .map(o => esc(o.op) + " ×" + o.count).join(" · ")}</div>`;
+  }
+  return h + `<button class="copyxml">copy plan xml</button>`;
+}
+
+function attachExplain(container, statements) {
+  container.querySelectorAll("a.explain").forEach(a => {
+    a.onclick = async () => {
+      const row = a.closest(".qrow");
+      const existing = row.querySelector(".plan");
+      if (existing) { existing.remove(); return; }
+      const panel = document.createElement("div");
+      panel.className = "plan";
+      panel.textContent = "querying plan cache…";
+      row.appendChild(panel);
+      try {
+        const r = await fetch("/api/queryplan", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({statement: statements[+a.dataset.x]}),
+        });
+        const p = await r.json();
+        if (!r.ok) throw new Error(p.detail || p.title || r.status);
+        panel.innerHTML = renderPlan(p);
+        const cb = panel.querySelector("button.copyxml");
+        if (cb) copyButton(cb, () => p.plan_xml);
+      } catch (e) {
+        panel.innerHTML = `<span class="err">plan lookup failed: ${esc(e.message)}</span>`;
+      }
+    };
+  });
+}
 
 async function loadOverview() {
   const [stats, eps, ins] = await Promise.all([
@@ -379,6 +430,7 @@ async function loadOverview() {
     get(`/api/insights?window_minutes=${win()}`),
   ]);
   $("stats").textContent = stats.total_spans.toLocaleString() + " spans stored";
+  plansOn = stats.mssql_plans;
 
   const sorted = [...eps.endpoints].sort((a, b) => b.p95_ms - a.p95_ms);
   rows($("endpoints"),
@@ -395,26 +447,31 @@ async function loadOverview() {
     tr.onclick = () => showTraces(tr.dataset.ep));
 
   $("nplusone").innerHTML = ins.n_plus_one.length
-    ? ins.n_plus_one.map(n => `<div class="qrow hot">
+    ? ins.n_plus_one.map((n, i) => `<div class="qrow hot">
         <div class="qhead">
           <span class="qmeta">${n.repetitions}× the same query · ${fmtMs(n.total_ms)} wasted</span>
-          <a class="back cta" href="${traceURL(n.trace_id)}">view trace</a>
+          ${explainLink(i)}
+          <a class="back" href="${traceURL(n.trace_id)}">view trace</a>
         </div>
         ${sqlBlock(n.statement)}
       </div>`).join("")
     : `<div class="empty">None found. Good.</div>`;
   initSqlClamps($("nplusone"));
+  attachExplain($("nplusone"), ins.n_plus_one.map(n => n.statement));
 
-  $("slowq").innerHTML = ins.slow_queries.length
-    ? ins.slow_queries.slice(0, 10).map(q => `<div class="qrow">
+  const slow = ins.slow_queries.slice(0, 10);
+  $("slowq").innerHTML = slow.length
+    ? slow.map((q, i) => `<div class="qrow">
         <div class="qhead">
           <span class="qmeta">avg ${fmtMs(q.avg_ms)} · max ${fmtMs(q.max_ms)} · ${q.calls} call${q.calls > 1 ? "s" : ""} · ${esc(q.db_system)}</span>
-          <a class="back cta" href="${traceURL(q.example_trace)}">view slowest trace</a>
+          ${explainLink(i)}
+          <a class="back" href="${traceURL(q.example_trace)}">view slowest trace</a>
         </div>
         ${sqlBlock(q.statement)}
       </div>`).join("")
     : `<div class="empty">No database spans in this window.</div>`;
   initSqlClamps($("slowq"));
+  attachExplain($("slowq"), slow.map(q => q.statement));
 
   rows($("errors"), ["when", "span", "service", "message", "trace"],
     ins.errors.slice(0, 15),
@@ -642,7 +699,10 @@ if (traceMatch) {
   $("back2").onclick = () => { $("traces-section").hidden = true; currentEndpoint = ""; };
   $("window").onchange = loadOverview;
   loadOverview().catch(e => $("stats").textContent = e.message);
-  setInterval(() => loadOverview().catch(() => {}), 10000);
+  setInterval(() => {
+    if (document.querySelector(".plan")) return;   // don't wipe an open plan panel
+    loadOverview().catch(() => {});
+  }, 10000);
 }
 </script>
 </body>

@@ -124,8 +124,11 @@ type InsightsOutput struct {
 type StatsOutput struct {
 	Body struct {
 		TotalSpans int64 `json:"total_spans"`
+		MssqlPlans bool  `json:"mssql_plans" doc:"True when GLIMPSE_MSSQL_DSN is configured"`
 	}
 }
+
+var plansEnabled bool
 
 var spanKindNames = map[int64]string{
 	0: "unspecified", 1: "internal", 2: "server", 3: "client", 4: "producer", 5: "consumer",
@@ -294,6 +297,7 @@ func registerAPI(api huma.API, queries *gendb.Queries) {
 		}
 		out := &StatsOutput{}
 		out.Body.TotalSpans = total
+		out.Body.MssqlPlans = plansEnabled
 		return out, nil
 	})
 }
