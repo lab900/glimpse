@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>glimpse</title>
+<style>
+  /* Dual palette: one green (data) + one amber (errors). Nothing else. */
+  :root {
+    color-scheme: light;
+    --page: #ece7d4; --surface: #f5f1e2;
+    --ink: #16351f; --ink-2: #3c5c44; --muted: #7a8a76;
+    --grid: #d3ccb2; --baseline: #a8a488;
+    --accent: #1c7a3d; --accent-dim: #6fa480;
+    --alert: #a35200;
+    --shadow: rgba(22, 53, 31, .25);
+    --wash: rgba(22, 53, 31, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #090c09; --surface: #0e130e;
+      --ink: #bce8c4; --ink-2: #83b58e; --muted: #4d7355;
+      --grid: #1d2b1f; --baseline: #2f4733;
+      --accent: #46e07c; --accent-dim: #2a7a48;
+      --alert: #ffb000;
+      --shadow: rgba(0, 0, 0, .6);
+      --wash: rgba(70, 224, 124, .07);
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    body::after {
+      content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 99;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 1px, transparent 1px 3px);
+    }
+  }
+  header {
+    display: flex; align-items: baseline; gap: 16px;
+    padding: 14px 20px; border-bottom: 2px solid var(--ink);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: .06em; }
+  header h1 a { color: inherit; text-decoration: none; }
+  header h1::before { content: "> "; color: var(--accent); }
+  #cursor { display: inline-block; width: 8px; height: 13px; background: var(--accent);
+      vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header select {
+    margin-left: auto; background: var(--surface); color: var(--ink);
+    border: 2px solid var(--ink); border-radius: 0; padding: 3px 8px; font: inherit;
+  }
+  header button { box-shadow: none; padding: 3px 8px; }
+  header button::before { content: "✕ "; color: var(--alert); }
+  main { margin: 0; padding: 24px 28px; display: grid; gap: 24px; }
+  main.trace-layout { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); align-items: start; }
+  aside { display: grid; gap: 20px; }
+  section {
+    background: var(--surface); border: 2px solid var(--ink);
+    box-shadow: 5px 5px 0 var(--shadow);
+    padding: 14px 16px; overflow-x: auto;
+  }
+  h2 { font-size: 12px; margin: 0 0 12px; color: var(--ink-2); font-weight: 700;
+       letter-spacing: .1em; text-transform: uppercase; cursor: pointer; user-select: none; }
+  h2::before { content: "["; color: var(--accent); margin-right: 6px; }
+  h2::after  { content: "] ▾"; color: var(--accent); margin-left: 6px; }
+  section.collapsed h2 { margin-bottom: 0; }
+  section.collapsed h2::after { content: "] ▸"; }
+  section.collapsed > *:not(h2) { display: none !important; }
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; color: var(--muted); font-weight: 700; font-size: 11px;
+       text-transform: uppercase; letter-spacing: .08em;
+       border-bottom: 2px solid var(--baseline); padding: 4px 12px 4px 0; }
+  td { padding: 5px 12px 5px 0; border-bottom: 1px dashed var(--grid);
+       font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.click { cursor: pointer; }
+  tr.click:hover td { background: var(--ink); color: var(--page); }
+  tr.click:hover td .mini-track { border-color: var(--page); }
+  tr.click:hover td .mini-bar { background: var(--page); }
+  .num { text-align: right; }
+  th.num { text-align: right; }
+  .err { color: var(--alert); font-weight: 700; }
+  .err::before { content: "✕ "; }
+  .ok { color: var(--muted); }
+  .empty { color: var(--muted); padding: 6px 0; }
+  code { font: inherit; font-size: 12px; color: var(--ink-2); }
+  code::before { content: "`"; color: var(--muted); }
+  code::after  { content: "`"; color: var(--muted); }
+  a.back { color: var(--ink-2); font-size: 12px; text-decoration: none; cursor: pointer; }
+  a.back::before { content: "← "; color: var(--accent); }
+  a.back:hover { background: var(--ink); color: var(--page); }
+  button {
+    font: inherit; font-size: 12px; background: var(--surface); color: var(--ink);
+    border: 2px solid var(--ink); border-radius: 0; padding: 4px 10px; cursor: pointer;
+    box-shadow: 2px 2px 0 var(--shadow); text-align: left;
+  }
+  button:hover { background: var(--ink); color: var(--page); }
+  button:active { box-shadow: none; transform: translate(2px, 2px); }
+  button::before { content: "▸ "; color: var(--accent); }
+  button:hover::before { color: var(--page); }
+
+  .pix { background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 6px); }
+  .pix.error { background: repeating-linear-gradient(90deg, var(--alert) 0 4px, transparent 4px 6px); }
+
+  .mini-track { position: relative; width: 160px; height: 8px; display: inline-block;
+      border: 1px solid var(--baseline); vertical-align: 0; }
+  .mini-bar { position: absolute; left: 0; top: 0; height: 100%; min-width: 4px; }
+
+  /* ---- trace page ---- */
+  .trace-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px; margin: 10px 0 14px; }
+  .trace-head .title { font-size: 14px; font-weight: 700; }
+  .trace-head .meta { color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .legend { display: flex; gap: 18px; font-size: 11px; color: var(--ink-2);
+      text-transform: uppercase; letter-spacing: .06em; margin: 0 0 8px; }
+  .legend .sw { display: inline-block; width: 22px; height: 8px; margin-right: 6px; vertical-align: 0; }
+
+  /* sidebar */
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 12px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; overflow-wrap: anywhere; white-space: normal; font-variant-numeric: tabular-nums; }
+  .side-actions { display: grid; gap: 8px; }
+  .side-hint { color: var(--muted); font-size: 11px; margin-top: 10px; white-space: normal; }
+  .qrow { border-bottom: 1px dashed var(--grid); padding: 8px 0; font-size: 12px; white-space: normal; }
+  .qrow:last-child { border-bottom: none; }
+  .qhead { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+  .qhead .qmeta { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .qhead .cta { margin-left: auto; }
+  .qrow.hot .qmeta { color: var(--alert); font-weight: 700; }
+  pre.sql { margin: 6px 0 0; padding: 6px 10px; font: inherit; font-size: 11.5px;
+      line-height: 1.5; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere;
+      border-left: 2px solid var(--baseline); background: var(--wash); }
+  pre.sql.clamped { display: -webkit-box; -webkit-line-clamp: 10; -webkit-box-orient: vertical;
+      overflow: hidden; }
+  a.more { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--ink-2); cursor: pointer; }
+  a.more::before { content: "▸ "; color: var(--accent); }
+  a.more:hover { background: var(--ink); color: var(--page); }
+
+  /* ---- waterfall ---- */
+  .wf { min-width: 600px; }
+  .wf-row {
+    display: grid; grid-template-columns: minmax(240px, 34%) 1fr 84px;
+    align-items: center; min-height: 24px; cursor: pointer;
+  }
+  .wf-row[data-i]:hover { background: var(--wash); }
+  .wf-row.selected { background: var(--wash); box-shadow: inset 2px 0 0 var(--accent); }
+  .wf-row.iserror .txt { color: var(--alert); }
+  .wf-axis { min-height: 20px; align-items: end; cursor: default; }
+  .wf-axis .tick { position: absolute; transform: translateX(-50%); font-size: 10px;
+      color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .wf-axis .tick.first { transform: none; }
+  .wf-axis .tick.last { transform: translateX(-100%); }
+  .wf-label {
+    display: flex; align-items: center; gap: 7px; font-size: 12px;
+    overflow: hidden; white-space: nowrap; padding-right: 12px;
+  }
+  .wf-label .txt { overflow: hidden; text-overflow: ellipsis; }
+  .wf-label .svc { color: var(--muted); font-size: 10px; flex: none; }
+  .tree { color: var(--baseline); flex: none; }
+  .caret { flex: none; color: var(--accent); cursor: pointer; width: 14px; text-align: center; }
+  .caret:hover { background: var(--ink); color: var(--page); }
+  .caret.leaf { visibility: hidden; }
+  .hidden-count { color: var(--muted); font-size: 10px; }
+  .wf-track {
+    position: relative; height: 100%; min-height: 24px; border-left: 1px solid var(--baseline);
+    background:
+      linear-gradient(to right, var(--grid) 1px, transparent 1px) no-repeat 25% 0 / 1px 100%,
+      linear-gradient(to right, var(--grid) 1px, transparent 1px) no-repeat 50% 0 / 1px 100%,
+      linear-gradient(to right, var(--grid) 1px, transparent 1px) no-repeat 75% 0 / 1px 100%,
+      linear-gradient(to right, var(--grid) 1px, transparent 1px) no-repeat 100% 0 / 1px 100%;
+  }
+  .wf-bar { position: absolute; top: 50%; margin-top: -4px; height: 8px; min-width: 4px; }
+  .wf-bar.k-server   { background: var(--accent); }
+  .wf-bar.k-client   { background: repeating-linear-gradient(90deg, var(--accent-dim) 0 4px, transparent 4px 6px); }
+  .wf-bar.k-internal { background: transparent; border: 1px solid var(--accent-dim); }
+  .wf-bar.k-other    { background: var(--baseline); }
+  .wf-bar.error      { background: var(--alert); border: none; }
+  .wf-dur { text-align: right; font-size: 11.5px; color: var(--ink-2);
+      font-variant-numeric: tabular-nums; padding-left: 10px; }
+
+  @media (max-width: 900px) { main.trace-layout { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="/">glimpse</a><span id="cursor"></span></h1>
+  <span class="sub" id="stats"></span>
+  <select id="window" hidden>
+    <option value="15" selected>last 15 min</option>
+    <option value="60">last hour</option>
+    <option value="360">last 6 hours</option>
+    <option value="1440">last 24 hours</option>
+  </select>
+  <button id="wipe" hidden>wipe db</button>
+</header>
+
+<main id="index-page" hidden>
+  <section id="traces-section" hidden>
+    <a class="back" id="back2">back to endpoints</a>
+    <h2 id="traces-title" style="margin-top:10px">Recent traces</h2>
+    <table id="traces"></table>
+  </section>
+
+  <section id="endpoints-section">
+    <h2>Endpoints</h2>
+    <table id="endpoints"></table>
+  </section>
+
+  <section>
+    <h2>N+1 suspects</h2>
+    <div id="nplusone"></div>
+  </section>
+
+  <section>
+    <h2>Slowest queries</h2>
+    <div id="slowq"></div>
+  </section>
+
+  <section>
+    <h2>Recent errors</h2>
+    <table id="errors"></table>
+  </section>
+</main>
+
+<main id="trace-page" class="trace-layout" hidden>
+  <section>
+    <a class="back" href="/">all endpoints</a>
+    <div class="trace-head" id="trace-head"></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--accent)"></span>server</span>
+      <span><span class="sw" style="background:repeating-linear-gradient(90deg,var(--accent-dim) 0 4px,transparent 4px 6px)"></span>client</span>
+      <span><span class="sw" style="border:1px solid var(--accent-dim)"></span>internal</span>
+      <span><span class="sw" style="background:var(--baseline)"></span>other</span>
+    </div>
+    <div class="wf" id="waterfall"></div>
+  </section>
+  <aside>
+    <section>
+      <h2>Trace</h2>
+      <dl class="kv" id="side-meta"></dl>
+    </section>
+    <section>
+      <h2>Feed your AI</h2>
+      <div class="side-actions">
+        <button id="copy-digest">copy digest</button>
+        <button id="copy-id">copy trace id</button>
+        <button id="copy-curl">copy curl command</button>
+      </div>
+      <p class="side-hint">The digest is a plain-text summary of this trace, made
+        for pasting into an AI chat. The curl command fetches the same digest from
+        <code>/api/traces/{id}/digest</code>.</p>
+    </section>
+    <section>
+      <h2>Span</h2>
+      <dl class="kv" id="side-span"><dd class="empty" style="grid-column:1/-1">Click a row in the waterfall.</dd></dl>
+    </section>
+    <section>
+      <h2>Queries in trace</h2>
+      <div id="side-queries"><div class="empty">No database spans.</div></div>
+    </section>
+  </aside>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtMs = v => v >= 1000 ? (v/1000).toFixed(2) + " s" : v >= 10 ? v.toFixed(0) + " ms" : v.toFixed(1) + " ms";
+const fmtTime = iso => new Date(iso).toLocaleTimeString();
+const win = () => $("window").value;
+const traceURL = id => "/trace/" + encodeURIComponent(id);
+
+/* Heuristic SQL beautifier for ORM-generated statements (Hibernate etc.):
+   strips [brackets], collapses giant select lists, renames t1_0-style aliases
+   back to their table names, and breaks lines at clauses. Display only —
+   copy/digest keep the raw statement. */
+function prettySQL(sql) {
+  let s = sql.replace(/[\[\]]/g, "").replace(/\s+/g, " ").trim();
+
+  // alias map from "schema.table alias" after FROM/JOIN
+  const aliases = {};
+  for (const m of s.matchAll(/\b(?:from|join)\s+([\w.]+)\s+(\w+_\d+)\b/gi) ) {
+    aliases[m[2]] = m[1].split(".").pop();
+  }
+
+  // collapse the top-level select list when it is long
+  const selMatch = s.match(/^select\s+(distinct\s+)?/i);
+  if (selMatch) {
+    let depth = 0, fromIdx = -1;
+    for (let i = selMatch[0].length; i < s.length - 5; i++) {
+      const c = s[i];
+      if (c === "(") depth++;
+      else if (c === ")") depth--;
+      else if (depth === 0 && s.slice(i, i + 6).toLowerCase() === " from ") { fromIdx = i; break; }
+    }
+    if (fromIdx > 0) {
+      const list = s.slice(selMatch[0].length, fromIdx);
+      let cols = 1, d = 0;
+      for (const c of list) {
+        if (c === "(") d++; else if (c === ")") d--;
+        else if (c === "," && d === 0) cols++;
+      }
+      if (cols > 6) {
+        s = selMatch[0] + "‹" + cols + " columns›" + s.slice(fromIdx);
+      }
+    }
+  }
+
+  for (const [alias, table] of Object.entries(aliases)) {
+    s = s.replaceAll(alias + ".", table + ".");
+  }
+
+  s = s.replace(/\s+(left outer join|right outer join|left join|right join|inner join|cross join|outer join|join|from|where|group by|order by|having|union all|union|limit|offset|values|returning|fetch first)\s+/gi,
+      (_, kw) => "\n" + kw.toUpperCase() + " ");
+  s = s.replace(/\s+(and|or)\s+/gi, (_, kw) => "\n  " + kw.toUpperCase() + " ");
+  s = s.replace(/^(select|insert into|insert|update|delete|declare|use|set|with)\b/i, m => m.toUpperCase());
+  s = s.replace(/\b(distinct|on|as|set|in|not|null|is|like|between|exists|case|when|then|else|end|asc|desc|count|max|min|avg|sum|cast|coalesce)\b/gi,
+      m => m.toUpperCase());
+  return s;
+}
+
+async function get(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + " -> " + r.status);
+  return r.json();
+}
+
+const sqlBlock = sql =>
+  `<pre class="sql clamped">${esc(prettySQL(sql))}</pre><a class="more" hidden>show more</a>`;
+
+// Reveal the show-more link only where the 10-line clamp actually cuts something.
+function initSqlClamps(root) {
+  root.querySelectorAll("pre.sql").forEach(pre => {
+    const btn = pre.nextElementSibling;
+    if (!btn || !btn.classList.contains("more")) return;
+    if (pre.classList.contains("clamped") && pre.scrollHeight > pre.clientHeight + 2) btn.hidden = false;
+    btn.onclick = () => {
+      pre.classList.toggle("clamped");
+      btn.textContent = pre.classList.contains("clamped") ? "show more" : "show less";
+    };
+  });
+}
+
+// Collapsible sections, remembered per title.
+function initCollapsibles() {
+  document.querySelectorAll("section > h2").forEach(h => {
+    const sec = h.parentElement;
+    const key = "glimpse-collapse:" + (h.id || h.textContent.trim());
+    if (localStorage.getItem(key) === "1") sec.classList.add("collapsed");
+    h.onclick = () => {
+      sec.classList.toggle("collapsed");
+      localStorage.setItem(key, sec.classList.contains("collapsed") ? "1" : "0");
+      if (!sec.classList.contains("collapsed")) initSqlClamps(sec);
+    };
+  });
+}
+
+function rows(table, head, items, render, emptyMsg) {
+  if (!items.length) {
+    table.innerHTML = `<tr><td class="empty">${emptyMsg}</td></tr>`;
+    return;
+  }
+  table.innerHTML = "<tr>" + head.map(h =>
+    `<th class="${h.startsWith(">") ? "num" : ""}">${h.replace(">", "")}</th>`).join("") + "</tr>"
+    + items.map(render).join("");
+}
+
+/* ============ index page ============ */
+
+let currentEndpoint = "";
+
+async function loadOverview() {
+  const [stats, eps, ins] = await Promise.all([
+    get("/api/stats"),
+    get(`/api/endpoints?window_minutes=${win()}`),
+    get(`/api/insights?window_minutes=${win()}`),
+  ]);
+  $("stats").textContent = stats.total_spans.toLocaleString() + " spans stored";
+
+  const sorted = [...eps.endpoints].sort((a, b) => b.p95_ms - a.p95_ms);
+  rows($("endpoints"),
+    ["endpoint", "service", ">calls", ">errors", ">avg", ">p50", ">p95", ">max"],
+    sorted,
+    e => `<tr class="click" data-ep="${esc(e.name)}">
+      <td>${esc(e.name)}</td><td>${esc(e.service)}</td>
+      <td class="num">${e.calls}</td>
+      <td class="num ${e.error_count ? "err" : "ok"}">${e.error_count}</td>
+      <td class="num">${fmtMs(e.avg_ms)}</td><td class="num">${fmtMs(e.p50_ms)}</td>
+      <td class="num">${fmtMs(e.p95_ms)}</td><td class="num">${fmtMs(e.max_ms)}</td></tr>`,
+    "No requests in this window. Point your app's OTel agent at this server and make a request.");
+  $("endpoints").querySelectorAll("tr.click").forEach(tr =>
+    tr.onclick = () => showTraces(tr.dataset.ep));
+
+  $("nplusone").innerHTML = ins.n_plus_one.length
+    ? ins.n_plus_one.map(n => `<div class="qrow hot">
+        <div class="qhead">
+          <span class="qmeta">${n.repetitions}× the same query · ${fmtMs(n.total_ms)} wasted</span>
+          <a class="back cta" href="${traceURL(n.trace_id)}">view trace</a>
+        </div>
+        ${sqlBlock(n.statement)}
+      </div>`).join("")
+    : `<div class="empty">None found. Good.</div>`;
+  initSqlClamps($("nplusone"));
+
+  $("slowq").innerHTML = ins.slow_queries.length
+    ? ins.slow_queries.slice(0, 10).map(q => `<div class="qrow">
+        <div class="qhead">
+          <span class="qmeta">avg ${fmtMs(q.avg_ms)} · max ${fmtMs(q.max_ms)} · ${q.calls} call${q.calls > 1 ? "s" : ""} · ${esc(q.db_system)}</span>
+          <a class="back cta" href="${traceURL(q.example_trace)}">view slowest trace</a>
+        </div>
+        ${sqlBlock(q.statement)}
+      </div>`).join("")
+    : `<div class="empty">No database spans in this window.</div>`;
+  initSqlClamps($("slowq"));
+
+  rows($("errors"), ["when", "span", "service", "message", "trace"],
+    ins.errors.slice(0, 15),
+    e => `<tr><td>${fmtTime(e.start)}</td><td class="err">${esc(e.name)}</td>
+      <td>${esc(e.service)}</td><td>${esc(e.message || "—")}</td>
+      <td><a class="back" href="${traceURL(e.trace_id)}">${esc(e.trace_id.slice(0, 12))}…</a></td></tr>`,
+    "No errors in this window.");
+}
+
+async function showTraces(endpoint) {
+  currentEndpoint = endpoint;
+  $("traces-section").hidden = false;
+  $("traces-title").textContent = "Recent traces — " + endpoint;
+  const data = await get(`/api/traces?endpoint=${encodeURIComponent(endpoint)}&limit=30&window_minutes=${win()}`);
+  const maxDur = Math.max(...data.traces.map(t => t.duration_ms), 1);
+  rows($("traces"), ["when", ">duration", "", ">status", "trace"],
+    data.traces,
+    t => `<tr class="click" onclick="location.href='${traceURL(t.trace_id)}'">
+      <td>${fmtTime(t.start)}</td>
+      <td class="num">${fmtMs(t.duration_ms)}</td>
+      <td><span class="mini-track"><span class="mini-bar pix ${t.error ? "error" : ""}"
+          style="width:${Math.max(t.duration_ms / maxDur * 100, 4)}%"></span></span></td>
+      <td class="num ${t.error ? "err" : ""}">${t.http_status || (t.error ? "error" : "ok")}</td>
+      <td>${esc(t.trace_id.slice(0, 16))}…</td></tr>`,
+    "No traces in this window.");
+  $("traces-section").scrollIntoView({behavior: "smooth"});
+}
+
+/* ============ trace page ============ */
+
+const kindClass = k =>
+  k === "server" ? "k-server" : k === "client" ? "k-client"
+  : k === "internal" ? "k-internal" : "k-other";
+
+// Order spans depth-first so children sit directly under their parent.
+function treeOrder(spans) {
+  const byId = Object.fromEntries(spans.map(s => [s.span_id, s]));
+  const children = {};
+  const roots = [];
+  for (const s of spans) {
+    if (s.parent_span_id && byId[s.parent_span_id]) {
+      (children[s.parent_span_id] ??= []).push(s);
+    } else {
+      roots.push(s);
+    }
+  }
+  const out = [];
+  const visit = (s, depth) => {
+    const kids = (children[s.span_id] ?? []).sort((a, b) => a.start_ns - b.start_ns);
+    out.push({span: s, depth, childCount: kids.length});
+    kids.forEach(c => visit(c, depth + 1));
+  };
+  roots.sort((a, b) => a.start_ns - b.start_ns).forEach(r => visit(r, 0));
+  return out;
+}
+
+const trace = { id: "", spans: [], ordered: [], t0: 0, totalNs: 1, collapsed: new Set(), selected: -1 };
+
+function descendantCount(i) {
+  const d = trace.ordered[i].depth;
+  let n = 0;
+  for (let j = i + 1; j < trace.ordered.length && trace.ordered[j].depth > d; j++) n++;
+  return n;
+}
+
+function renderWaterfall() {
+  const { ordered, t0, totalNs, collapsed, selected } = trace;
+  const totalMs = totalNs / 1e6;
+  const rootSvc = ordered[0].span.service;
+
+  const axis = `<div class="wf-row wf-axis">
+    <div></div>
+    <div class="wf-track" style="border-left-color:transparent">
+      ${[0, .25, .5, .75, 1].map(f =>
+        `<span class="tick ${f === 0 ? "first" : f === 1 ? "last" : ""}"
+          style="left:${f * 100}%">${fmtMs(totalMs * f)}</span>`).join("")}
+    </div>
+    <div></div></div>`;
+
+  let html = axis;
+  let hideBelow = -1;   // hide rows deeper than this depth (inside a collapsed subtree)
+  ordered.forEach(({span: s, depth, childCount}, i) => {
+    if (hideBelow >= 0 && depth > hideBelow) return;
+    hideBelow = -1;
+    const isCollapsed = collapsed.has(s.span_id);
+    if (isCollapsed) hideBelow = depth;
+
+    const left = ((s.start_ns - t0) / totalNs * 100).toFixed(2);
+    const width = Math.max(s.duration_ms * 1e6 / totalNs * 100, 0.4).toFixed(2);
+    const guide = depth ? "&nbsp;".repeat((depth - 1) * 2) + "└─" : "";
+    html += `<div class="wf-row ${s.error ? "iserror" : ""} ${i === selected ? "selected" : ""}" data-i="${i}">
+      <div class="wf-label">
+        ${guide ? `<span class="tree">${guide}</span>` : ""}
+        <span class="caret ${childCount ? "" : "leaf"}" data-toggle="${i}">${isCollapsed ? "▸" : "▾"}</span>
+        <span class="txt" title="${esc(s.name)}">${esc(s.name)}</span>
+        ${isCollapsed ? `<span class="hidden-count">+${descendantCount(i)} hidden</span>` : ""}
+        ${s.service !== rootSvc ? `<span class="svc">${esc(s.service)}</span>` : ""}
+      </div>
+      <div class="wf-track">
+        <div class="wf-bar ${kindClass(s.kind)} ${s.error ? "error" : ""}"
+             style="left:${left}%;width:${width}%"></div>
+      </div>
+      <div class="wf-dur ${s.error ? "err" : ""}">${fmtMs(s.duration_ms)}</div>
+    </div>`;
+  });
+  $("waterfall").innerHTML = html;
+
+  $("waterfall").querySelectorAll(".caret[data-toggle]:not(.leaf)").forEach(c => {
+    c.onclick = ev => {
+      ev.stopPropagation();
+      const id = trace.ordered[+c.dataset.toggle].span.span_id;
+      trace.collapsed.has(id) ? trace.collapsed.delete(id) : trace.collapsed.add(id);
+      renderWaterfall();
+    };
+  });
+  $("waterfall").querySelectorAll(".wf-row[data-i]").forEach(row => {
+    row.onclick = () => selectSpan(+row.dataset.i);
+  });
+}
+
+function selectSpan(i) {
+  trace.selected = i;
+  const s = trace.ordered[i].span;
+  const rowsKV = [
+    ["name", s.name], ["kind", s.kind], ["service", s.service],
+    ["duration", fmtMs(s.duration_ms)],
+    ["offset", fmtMs((s.start_ns - trace.t0) / 1e6)],
+    ["span id", s.span_id],
+  ];
+  if (s.error) rowsKV.push(["error", s.status_message || "error"]);
+  const attrs = Object.entries(s.attrs || {});
+  $("side-span").innerHTML =
+    rowsKV.map(([k, v]) => `<dt>${esc(k)}</dt><dd${k === "error" ? ' class="err"' : ""}>${esc(v)}</dd>`).join("")
+    + (attrs.length ? `<dt style="grid-column:1/-1;margin-top:8px;border-top:1px dashed var(--grid);padding-top:6px">attributes</dt>` : "")
+    + attrs.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v).slice(0, 300))}</dd>`).join("");
+  renderWaterfall();
+}
+
+function renderSideQueries(spans) {
+  const groups = {};
+  for (const s of spans) {
+    const sql = (s.attrs || {})["db.statement"] || (s.attrs || {})["db.query.text"];
+    if (!sql) continue;
+    (groups[sql] ??= {count: 0, totalMs: 0}).count++;
+    groups[sql].totalMs += s.duration_ms;
+  }
+  const list = Object.entries(groups).sort((a, b) => b[1].count - a[1].count);
+  if (!list.length) return;
+  $("side-queries").innerHTML = list.map(([sql, g]) =>
+    `<div class="qrow ${g.count >= 5 ? "hot" : ""}">
+      <div class="qmeta">${g.count}× · ${fmtMs(g.totalMs)}${g.count >= 5 ? " · N+1?" : ""}</div>
+      ${sqlBlock(sql)}
+    </div>`).join("");
+  initSqlClamps($("side-queries"));
+}
+
+function copyButton(btn, getText) {
+  btn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(await getText());
+      const old = btn.textContent;
+      btn.textContent = "copied!";
+      setTimeout(() => btn.textContent = old, 1200);
+    } catch (e) {
+      btn.textContent = "copy failed";
+    }
+  };
+}
+
+async function loadTracePage(traceId) {
+  const data = await get("/api/traces/" + traceId);
+  const spans = data.spans;
+  trace.id = data.trace_id;
+  trace.spans = spans;
+  trace.t0 = Math.min(...spans.map(s => s.start_ns));
+  trace.totalNs = Math.max(...spans.map(s => s.start_ns + s.duration_ms * 1e6)) - trace.t0 || 1;
+  trace.ordered = treeOrder(spans);
+
+  const root = trace.ordered[0].span;
+  const services = [...new Set(spans.map(s => s.service))];
+  const errors = spans.filter(s => s.error).length;
+  const totalMs = trace.totalNs / 1e6;
+
+  document.title = "glimpse — " + root.name;
+  $("stats").textContent = "trace " + trace.id.slice(0, 16) + "…";
+  $("trace-head").innerHTML = `
+    <span class="title">${esc(root.name)}</span>
+    <span class="meta">${fmtMs(totalMs)} · ${spans.length} spans
+      ${errors ? ` · <span class="err">${errors} error${errors > 1 ? "s" : ""}</span>` : ""}</span>`;
+
+  $("side-meta").innerHTML = [
+    ["trace id", trace.id], ["root", root.name],
+    ["start", new Date(root.start).toLocaleString()],
+    ["duration", fmtMs(totalMs)], ["spans", spans.length],
+    ["services", services.join(", ")],
+    ["errors", errors || "none"],
+  ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+
+  renderSideQueries(spans);
+  renderWaterfall();
+
+  const digestURL = location.origin + "/api/traces/" + trace.id + "/digest";
+  copyButton($("copy-digest"), async () => (await fetch(digestURL)).text());
+  copyButton($("copy-id"), () => trace.id);
+  copyButton($("copy-curl"), () => "curl -s " + digestURL);
+}
+
+/* ============ router ============ */
+
+initCollapsibles();
+const traceMatch = location.pathname.match(/^\/trace\/([0-9a-f]+)$/);
+if (traceMatch) {
+  $("trace-page").hidden = false;
+  loadTracePage(traceMatch[1]).catch(e => $("stats").textContent = e.message);
+} else {
+  $("index-page").hidden = false;
+  $("window").hidden = false;
+  $("wipe").hidden = false;
+  $("wipe").onclick = async () => {
+    if (!confirm("Delete ALL stored spans?")) return;
+    await fetch("/api/spans", {method: "DELETE"});
+    $("traces-section").hidden = true; currentEndpoint = "";
+    loadOverview();
+  };
+  $("back2").onclick = () => { $("traces-section").hidden = true; currentEndpoint = ""; };
+  $("window").onchange = loadOverview;
+  loadOverview().catch(e => $("stats").textContent = e.message);
+  setInterval(() => loadOverview().catch(() => {}), 10000);
+}
+</script>
+</body>
+</html>
