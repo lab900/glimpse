@@ -6,6 +6,24 @@ insights: slow endpoints, N+1 queries, slow SQL, and errors.
 
 ## Run
 
+### Option A: download a release (no Go needed)
+
+Grab the binary for your platform from the
+[releases page](https://github.com/lab900-luis-santos/glimpse/releases), or
+with the GitHub CLI (works for this private repo when you are logged in):
+
+```sh
+gh release download --repo lab900-luis-santos/glimpse --pattern '*darwin-arm64*'
+tar -xzf glimpse-darwin-arm64.tar.gz
+./glimpse-darwin-arm64
+```
+
+Current release assets: `glimpse-darwin-arm64` (macOS Apple Silicon). Ask for
+other platforms or build one yourself:
+`GOOS=linux GOARCH=amd64 go build -o glimpse ./cmd/server`.
+
+### Option B: build from source
+
 ```sh
 make build      # or: go build -o glimpse ./cmd/server
 ./glimpse
