@@ -124,7 +124,41 @@ environment:
 ```
 
 Do not run it beside another OpenTelemetry-based agent (for example
-Application Insights 3.x) in the same JVM.
+Application Insights 3.x) in the same JVM. Use the next section for that case.
+
+### Apps that already run the Application Insights agent
+
+The Application Insights 3.x Java agent is built on OpenTelemetry. It can send
+its traces to glimpse itself, so no second agent is necessary. Add the standard
+exporter variables to the app:
+
+```yaml
+environment:
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://glimpse:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_METRICS_EXPORTER: none
+  OTEL_LOGS_EXPORTER: none
+  OTEL_SERVICE_NAME: my-app
+  # Keep the agent on, but send nothing to Azure:
+  APPLICATIONINSIGHTS_CONNECTION_STRING: InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=http://127.0.0.1:9/
+  APPLICATIONINSIGHTS_CONFIGURATION_CONTENT: '{"preview":{"liveMetrics":{"enabled":false},"profiler":{"enabled":false},"statsbeat":{"disabled":true}}}'
+```
+
+What to know:
+
+- The Azure export stays on beside OTLP. The agent has no switch for it. The
+  dummy connection string above points it at a closed local port.
+- An empty connection string does not work: the agent then disables itself and
+  sends no OTLP either. A sampling percentage of 0 also stops OTLP.
+- If the image has a real connection string in its environment, a local stack
+  sends its telemetry to that Azure resource. Override it as above.
+- Without `OTEL_SERVICE_NAME`, the service name is `APPLICATIONINSIGHTS_ROLE_NAME`.
+- An agent that is older than the JDK instruments nothing. Agent 3.5.2 on
+  Java 25 needed the JVM flag `-Dnet.bytebuddy.experimental=true`.
+
+Verified with agent 3.5.2 on Java 25, with HTTP server spans and MongoDB spans.
+Not yet verified with SQL Server JDBC spans or with a newer agent.
 
 Any other OpenTelemetry SDK or agent works too, if it exports OTLP over HTTP
 (protobuf or JSON, gzip accepted) to `POST /v1/traces`.
