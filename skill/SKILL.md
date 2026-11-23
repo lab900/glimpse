@@ -46,24 +46,37 @@ curl -s "http://localhost:4318/api/traces?endpoint=GET%20%2Fvets&limit=10"
 
 `curl -s http://localhost:4318/api/stats` returns the glimpse `version`,
 `db_bytes` (database size), `spans_by_service` (span count per service name),
-and `mssql_plans`. Use `spans_by_service` to check that an app sends data, and
+`mssql_plans` and `postgres_plans`. Use `spans_by_service` to check that an app sends data, and
 to find the exact service names.
 
-## MSSQL execution plans
+## Execution plans (MSSQL or Postgres)
 
-If `/api/stats` reports `"mssql_plans": true`, you can fetch the cached
-execution plan for any captured statement:
+If `/api/stats` reports `"mssql_plans": true` or `"postgres_plans": true`, you
+can fetch the execution plan for any captured statement:
 
 ```sh
 curl -s -X POST http://localhost:4318/api/queryplan \
   -H "Content-Type: application/json" \
-  -d '{"statement": "<db.statement from a span, verbatim>"}'
+  -d '{"statement": "<db.statement from a span, verbatim>", "db_system": "<db.system of the span>"}'
 ```
 
-Returns missing-index suggestions with ready-to-run `CREATE INDEX` DDL,
-plan warnings, notable operators, execution counts, and avg logical reads.
-`plan_xml` holds the full showplan XML when you need the details. Use this
-before recommending an index — prefer the plan's own suggestion over guessing.
+`db_system` is optional. It matters only when both engines are configured:
+`postgresql` picks Postgres, anything else picks MSSQL. The response has
+`engine` (`mssql` or `postgres`).
+
+- MSSQL: reads the plan cache. Returns missing-index suggestions with
+  ready-to-run `CREATE INDEX` DDL, plan warnings, notable operators, execution
+  counts and avg logical reads. `plan_xml` holds the showplan XML. Prefer the
+  plan's own index suggestion over guessing.
+- Postgres (PostgreSQL 16+): runs `EXPLAIN (GENERIC_PLAN, FORMAT JSON)`, which
+  does not execute the statement. `missing_indexes` is always empty: Postgres
+  gives no index suggestions. `warnings` flags a filtered Seq Scan on a large
+  table, as a hint only. `operators` counts the node types. `plan_json` holds
+  the raw plan. Stats (`execution_count`, `avg_elapsed_ms`,
+  `avg_logical_reads`) come from `pg_stat_statements` and may be empty. A
+  generic plan has no parameter values, so check the hint against the code
+  before you recommend an index.
+- `found: false` comes with a `reason`.
 
 ## How to work with the data
 
