@@ -32,7 +32,9 @@ It is made for two readers:
 ## Quick start
 
 ```sh
-docker run --rm -p 127.0.0.1:4318:4318 ghcr.io/lab900/glimpse:latest
+gh release download --repo lab900/glimpse --pattern '*darwin-arm64*'   # or linux-amd64, ...
+tar -xzf glimpse-darwin-arm64.tar.gz
+./glimpse-darwin-arm64
 ```
 
 Start your app with the OpenTelemetry Java agent (see
@@ -46,14 +48,18 @@ the same host needs no endpoint configuration.
 
 ### Docker
 
-The image is `ghcr.io/lab900/glimpse`, for linux/amd64 and linux/arm64. Tags:
-the version (for example `0.2.0`) and `latest`. It runs as a non-root user and
-keeps its database in the `/data` volume.
+No image is published. Build it from the `Dockerfile`, which cross-compiles for
+linux/amd64 and linux/arm64. The image runs as a non-root user and keeps its
+database in the `/data` volume.
+
+```sh
+docker build --build-arg VERSION=v0.2.0 -t glimpse:0.2.0 https://github.com/lab900/glimpse.git#v0.2.0
+```
 
 ```yaml
 services:
   glimpse:
-    image: ghcr.io/lab900/glimpse:0.2.0
+    image: glimpse:0.2.0
     ports: ["127.0.0.1:4318:4318"]
     volumes: ["glimpse-data:/data"]
     # environment:
@@ -326,7 +332,7 @@ and SQLite through `modernc.org/sqlite`. See [AGENTS.md](AGENTS.md) for the
 layout and the rules of the code base.
 
 A release is one tag: `git tag v1.2.3 && git push origin v1.2.3`. The release
-workflow builds the binaries and the image.
+workflow builds the binaries and creates the GitHub release.
 
 ## Licence
 

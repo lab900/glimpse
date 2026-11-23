@@ -89,5 +89,5 @@ After a visible UI change, update `docs/screenshots/`.
 ## Release
 
 Push a tag `vX.Y.Z`. `.github/workflows/release.yml` builds six binaries with
-checksums, creates the GitHub release, and pushes the multi-arch image to
-`ghcr.io/lab900/glimpse`.
+checksums and creates the GitHub release. No Docker image is published; the
+`Dockerfile` is for users who build their own.
