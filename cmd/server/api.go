@@ -9,7 +9,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	gendb "github.com/lab900-luis-santos/glimpse/db"
+	gendb "github.com/lab900/glimpse/db"
 )
 
 type WindowInput struct {
@@ -134,10 +134,11 @@ type StatsOutput struct {
 		DBBytes        int64          `json:"db_bytes" doc:"Size of the SQLite database (page_count * page_size)"`
 		SpansByService []ServiceSpans `json:"spans_by_service"`
 		MssqlPlans     bool           `json:"mssql_plans" doc:"True when GLIMPSE_MSSQL_DSN is configured"`
+		PostgresPlans  bool           `json:"postgres_plans" doc:"True when GLIMPSE_POSTGRES_DSN is configured"`
 	}
 }
 
-var plansEnabled bool
+var plansEnabled, postgresPlansEnabled bool
 
 var spanKindNames = map[int64]string{
 	0: "unspecified", 1: "internal", 2: "server", 3: "client", 4: "producer", 5: "consumer",
@@ -323,6 +324,7 @@ func registerAPI(api huma.API, database *sql.DB, queries *gendb.Queries) {
 			out.Body.SpansByService = append(out.Body.SpansByService, ServiceSpans{Service: r.Service, Spans: r.Spans})
 		}
 		out.Body.MssqlPlans = plansEnabled
+		out.Body.PostgresPlans = postgresPlansEnabled
 		return out, nil
 	})
 }

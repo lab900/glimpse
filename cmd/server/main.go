@@ -22,12 +22,13 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
+	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 
-	glimpse "github.com/lab900-luis-santos/glimpse"
-	gendb "github.com/lab900-luis-santos/glimpse/db"
+	glimpse "github.com/lab900/glimpse"
+	gendb "github.com/lab900/glimpse/db"
 )
 
 //go:embed ui
@@ -68,6 +69,15 @@ func main() {
 		plansEnabled = true
 	}
 
+	var pg *pgx.ConnConfig
+	if dsn := os.Getenv("GLIMPSE_POSTGRES_DSN"); dsn != "" {
+		pg, err = openPostgres(dsn)
+		if err != nil {
+			log.Fatalf("bad GLIMPSE_POSTGRES_DSN: %v", err)
+		}
+		postgresPlansEnabled = true
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -79,7 +89,7 @@ func main() {
 	}
 	// No write timeout: it would cut slow responses such as big traces.
 	server := &http.Server{
-		Handler:           newRouter(database, queries, mssql),
+		Handler:           newRouter(database, queries, mssql, pg),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -91,6 +101,9 @@ func main() {
 	log.Printf("  API docs:    http://%s/docs", addr)
 	if mssql != nil {
 		log.Printf("  MSSQL execution plans enabled")
+	}
+	if pg != nil {
+		log.Printf("  Postgres execution plans enabled")
 	}
 
 	serveErr := make(chan error, 1)
@@ -135,7 +148,7 @@ func openDB(dbPath string) (*sql.DB, error) {
 }
 
 // newRouter wires ingest, the API, the digest and the UI.
-func newRouter(database *sql.DB, queries *gendb.Queries, mssql *sql.DB) http.Handler {
+func newRouter(database *sql.DB, queries *gendb.Queries, mssql *sql.DB, pg *pgx.ConnConfig) http.Handler {
 	router := http.NewServeMux()
 
 	// OTLP/HTTP ingest — the standard path the OpenTelemetry agents use.
@@ -147,8 +160,8 @@ func newRouter(database *sql.DB, queries *gendb.Queries, mssql *sql.DB) http.Han
 		"then read /api/endpoints, /api/insights, /api/traces."
 	api := humago.New(router, config)
 	registerAPI(api, database, queries)
-	if mssql != nil {
-		registerPlanAPI(api, mssql)
+	if mssql != nil || pg != nil {
+		registerPlanAPI(api, mssql, pg)
 	}
 
 	router.HandleFunc("GET /api/traces/{traceId}/digest", handleTraceDigest(queries))

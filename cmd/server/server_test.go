@@ -18,11 +18,10 @@ import (
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
-	glimpse "github.com/lab900-luis-santos/glimpse"
-	gendb "github.com/lab900-luis-santos/glimpse/db"
+	glimpse "github.com/lab900/glimpse"
+	gendb "github.com/lab900/glimpse/db"
 )
 
 const testTrace = "0123456789abcdef0123456789abcdef"
@@ -37,7 +36,7 @@ func newTestServer(t *testing.T) (http.Handler, *gendb.Queries) {
 	}
 	t.Cleanup(func() { database.Close() })
 	queries := gendb.New(database)
-	return newRouter(database, queries, nil), queries
+	return newRouter(database, queries, nil, nil), queries
 }
 
 func strAttr(k, v string) *commonpb.KeyValue {
@@ -127,22 +126,51 @@ func spansOf(t *testing.T, q *gendb.Queries, traceID string) []gendb.Span {
 	return spans
 }
 
+// otlpJSON builds an OTLP/JSON export the way the spec says: ids as hex strings.
+func otlpJSON(traceID, spanID, name string, start time.Time) []byte {
+	return []byte(fmt.Sprintf(`{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"svc-a"}}]},`+
+		`"scopeSpans":[{"spans":[{"traceId":%q,"spanId":%q,"name":%q,"kind":2,`+
+		`"startTimeUnixNano":"%d","endTimeUnixNano":"%d"}]}]}]}`,
+		traceID, spanID, name, start.UnixNano(), start.Add(time.Millisecond).UnixNano()))
+}
+
+func TestOTLPJSONSpecHexIds(t *testing.T) {
+	h, q := newTestServer(t)
+	const traceID = "5b8efff798038103d269b633813fc60c"
+	body := otlpJSON(traceID, "eee19b7ec3c1b174", "GET /spec", time.Now())
+	body = bytes.Replace(body, []byte(`"name"`), []byte(`"parentSpanId":"eee19b7ec3c1b173","name"`), 1)
+	if rec := post(t, h, "application/json", false, body); rec.Code != 200 {
+		t.Fatalf("export: status %d: %s", rec.Code, rec.Body)
+	}
+
+	spans := spansOf(t, q, traceID)
+	if len(spans) != 1 || spans[0].SpanID != "eee19b7ec3c1b174" || spans[0].ParentSpanID != "eee19b7ec3c1b173" {
+		t.Fatalf("stored spans: %+v", spans)
+	}
+	if got := get(t, h, "/api/traces/"+traceID); !strings.Contains(got, traceID) || !strings.Contains(got, "GET /spec") {
+		t.Fatalf("trace api: %s", got)
+	}
+	if got := get(t, h, "/api/traces/"+traceID+"/digest"); !strings.Contains(got, "GET /spec") {
+		t.Fatalf("digest: %s", got)
+	}
+
+	bad := bytes.Replace(body, []byte(traceID), []byte("zz8efff798038103d269b633813fc60c"), 1)
+	if rec := post(t, h, "application/json", false, bad); rec.Code != 400 {
+		t.Fatalf("non-hex id: status %d, want 400", rec.Code)
+	}
+}
+
 func TestIngestJSONCharsetAndGzip(t *testing.T) {
 	h, q := newTestServer(t)
 	now := time.Now()
-	jsonBody, err := protojson.Marshal(exportReq("svc-a",
-		testSpan(t, testTrace, "00000000000000a1", "", "GET /a", tracepb.Span_SPAN_KIND_SERVER, now, time.Millisecond)))
-	if err != nil {
-		t.Fatal(err)
-	}
+	jsonBody := otlpJSON(testTrace, "00000000000000a1", "GET /a", now)
 
 	rec := post(t, h, "application/json; charset=utf-8", false, jsonBody)
 	if rec.Code != 200 || !strings.HasPrefix(rec.Header().Get("Content-Type"), "application/json") {
 		t.Fatalf("json+charset: status %d, content-type %q, body %s", rec.Code, rec.Header().Get("Content-Type"), rec.Body)
 	}
 
-	jsonBody2, _ := protojson.Marshal(exportReq("svc-a",
-		testSpan(t, testTrace, "00000000000000a2", "", "GET /b", tracepb.Span_SPAN_KIND_SERVER, now, time.Millisecond)))
+	jsonBody2 := otlpJSON(testTrace, "00000000000000a2", "GET /b", now)
 	if rec := post(t, h, "application/json", true, jsonBody2); rec.Code != 200 {
 		t.Fatalf("gzip json: status %d: %s", rec.Code, rec.Body)
 	}

@@ -56,7 +56,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/lab900-luis-santos/glimpse
+          images: ghcr.io/lab900/glimpse
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest

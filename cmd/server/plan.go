@@ -10,15 +10,18 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/jackc/pgx/v5"
 	_ "github.com/microsoft/go-mssqldb"
 )
 
-// Execution-plan lookup for MSSQL. glimpse reads the plan cache DMVs
-// (read-only, needs VIEW SERVER STATE) and never executes captured SQL.
+// Execution-plan lookup. For MSSQL glimpse reads the plan cache DMVs
+// (read-only, needs VIEW SERVER STATE). For Postgres see plan_pg.go.
+// Captured SQL is never executed.
 
 type PlanInput struct {
 	Body struct {
 		Statement string `json:"statement" required:"true" minLength:"10" doc:"Captured db.statement to look up"`
+		DBSystem  string `json:"db_system,omitempty" doc:"db.system of the span (postgresql, mssql, microsoft.sql_server). Picks the engine when both are configured; MSSQL is the default."`
 	}
 }
 
@@ -35,6 +38,7 @@ type PlanOperator struct {
 
 type PlanOutput struct {
 	Body struct {
+		Engine         string         `json:"engine,omitempty" enum:"mssql,postgres" doc:"Which database produced the plan"`
 		Found          bool           `json:"found"`
 		Reason         string         `json:"reason,omitempty" doc:"Why no plan was found"`
 		ExecutionCount int64          `json:"execution_count,omitempty"`
@@ -44,11 +48,12 @@ type PlanOutput struct {
 		MissingIndexes []MissingIndex `json:"missing_indexes"`
 		Warnings       []string       `json:"warnings"`
 		Operators      []PlanOperator `json:"operators" doc:"Notable operators in the plan"`
-		PlanXML        string         `json:"plan_xml,omitempty"`
+		PlanXML        string         `json:"plan_xml,omitempty" doc:"MSSQL showplan XML"`
+		PlanJSON       string         `json:"plan_json,omitempty" doc:"Postgres EXPLAIN (FORMAT JSON) output"`
 	}
 }
 
-func registerPlanAPI(api huma.API, mssql *sql.DB) {
+func registerPlanAPI(api huma.API, mssql *sql.DB, pg *pgx.ConnConfig) {
 	huma.Post(api, "/api/queryplan", func(ctx context.Context, in *PlanInput) (*PlanOutput, error) {
 		ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 		defer cancel()
@@ -57,6 +62,20 @@ func registerPlanAPI(api huma.API, mssql *sql.DB) {
 		out.Body.MissingIndexes = []MissingIndex{}
 		out.Body.Warnings = []string{}
 		out.Body.Operators = []PlanOperator{}
+
+		engine, reason := chooseEngine(in.Body.DBSystem, mssql, pg)
+		if engine == "" {
+			out.Body.Reason = reason
+			return out, nil
+		}
+		if engine == enginePostgres {
+			res, err := explainPostgres(ctx, pg, in.Body.Statement, out)
+			if err != nil {
+				return nil, huma.Error502BadGateway(err.Error())
+			}
+			return res, nil
+		}
+		out.Body.Engine = engineMSSQL
 
 		row := mssql.QueryRowContext(ctx, `
 			SELECT TOP 1 qp.query_plan, qs.execution_count,

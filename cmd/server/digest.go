@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	gendb "github.com/lab900-luis-santos/glimpse/db"
+	gendb "github.com/lab900/glimpse/db"
 )
 
 // handleTraceDigest renders one trace as compact plain text made for feeding

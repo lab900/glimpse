@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"mime"
@@ -19,7 +22,7 @@ import (
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
-	gendb "github.com/lab900-luis-santos/glimpse/db"
+	gendb "github.com/lab900/glimpse/db"
 )
 
 const maxBodyBytes = 32 << 20 // 32 MiB per export request
@@ -48,7 +51,7 @@ func handleOTLPTraces(database *sql.DB, queries *gendb.Queries) http.HandlerFunc
 		mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 		isJSON := mediaType == "application/json"
 		if isJSON {
-			err = protojson.Unmarshal(raw, req)
+			err = unmarshalOTLPJSON(raw, req)
 		} else {
 			err = proto.Unmarshal(raw, req)
 		}
@@ -74,6 +77,73 @@ func handleOTLPTraces(database *sql.DB, queries *gendb.Queries) http.HandlerFunc
 			w.Write(out)
 		}
 	}
+}
+
+// unmarshalOTLPJSON decodes an OTLP/JSON export. The OTLP spec encodes traceId,
+// spanId and parentSpanId as hex strings, but protojson expects base64 for
+// bytes fields. So the ids are converted from hex to base64 first.
+func unmarshalOTLPJSON(raw []byte, req *coltracepb.ExportTraceServiceRequest) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber() // keep 64-bit numbers exact
+	var doc map[string]any
+	if err := dec.Decode(&doc); err != nil {
+		return err
+	}
+	for _, rs := range jsonList(doc, "resourceSpans", "resource_spans") {
+		for _, ss := range jsonList(rs, "scopeSpans", "scope_spans") {
+			for _, span := range jsonList(ss, "spans") {
+				for _, key := range []string{"traceId", "trace_id", "spanId", "span_id", "parentSpanId", "parent_span_id"} {
+					if err := hexToBase64(span, key); err != nil {
+						return err
+					}
+				}
+				for _, link := range jsonList(span, "links") {
+					for _, key := range []string{"traceId", "trace_id", "spanId", "span_id"} {
+						if err := hexToBase64(link, key); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+	}
+	converted, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	return protojson.Unmarshal(converted, req)
+}
+
+// jsonList returns the objects in the first of the given keys that holds an array.
+func jsonList(obj map[string]any, keys ...string) []map[string]any {
+	for _, key := range keys {
+		list, ok := obj[key].([]any)
+		if !ok {
+			continue
+		}
+		out := make([]map[string]any, 0, len(list))
+		for _, item := range list {
+			if m, ok := item.(map[string]any); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// hexToBase64 rewrites obj[key] from a hex string to base64 in place.
+func hexToBase64(obj map[string]any, key string) error {
+	v, ok := obj[key].(string)
+	if !ok {
+		return nil
+	}
+	b, err := hex.DecodeString(v)
+	if err != nil {
+		return fmt.Errorf("%s %q is not a hex string", key, v)
+	}
+	obj[key] = base64.StdEncoding.EncodeToString(b)
+	return nil
 }
 
 func storeSpans(ctx context.Context, database *sql.DB, queries *gendb.Queries, req *coltracepb.ExportTraceServiceRequest) error {
