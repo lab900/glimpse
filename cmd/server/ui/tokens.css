@@ -1,36 +1,58 @@
-/* Quire 3 — generated from tokens.json */
-@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("fonts/AtkinsonHyperlegibleNext-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("fonts/AtkinsonHyperlegibleNext-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("fonts/AtkinsonHyperlegibleNext-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: "Atkinson Hyperlegible Next"; src: url("fonts/AtkinsonHyperlegibleNext-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+/* Lab900 look for glimpse. Brand values follow the CoLab design tokens. */
+/* Lato has no 600, so its bold answers 600 and 700. */
+@font-face { font-family: "Lato"; src: url("fonts/Lato-400.woff2") format("woff2"); font-weight: 400 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Lato"; src: url("fonts/Lato-700.woff2") format("woff2"); font-weight: 600 700; font-style: normal; font-display: swap; }
 @font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: "IBM Plex Mono"; src: url("fonts/IBMPlexMono-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
-:root, [data-theme="paper"] {
-  --sheet: oklch(99.45% 0.0057 84.6);
-  --ground: oklch(92.26% 0.0266 106.9);
-  --fill: oklch(94.51% 0.0199 106.8);
-  --line: oklch(90.97% 0.0306 107.0);
-  --rule: oklch(65.55% 0.0213 302.0);
-  --ink: oklch(24.87% 0.0416 295.8);
-  --ink-muted: oklch(48.8% 0.0229 301.8);
-  --ink-faint: oklch(53.33% 0.0209 303.1);
-  --violet: oklch(49.07% 0.1261 292.5);
-  --violet-deep: oklch(43.57% 0.1182 292.0);
-  --halo: oklch(87.6% 0.0404 298.2);
-  --on-violet: oklch(99.45% 0.0057 84.6);
-  --cinnamon: oklch(81.16% 0.0956 62.7);
-  --cinnamon-plate: oklch(87.5% 0.0641 65.3);
-  --cinnamon-tint: oklch(93.52% 0.0327 67.4);
-  --olive: oklch(80.59% 0.0644 110.7);
-  --ok: oklch(48.0% 0.0874 121.3);
-  --warn: oklch(52.31% 0.1132 53.8);
-  --danger: oklch(49.42% 0.1555 28.1);
-  --danger-deep: oklch(44.54% 0.1405 28.1);
-  --danger-tint: oklch(93.82% 0.0205 32.5);
-  --shadow-sheet: 0 1px 3px oklch(24.87% 0.0416 295.8 / 0.07), 0 0 0 1px oklch(24.87% 0.0416 295.8 / 0.04);
-  --shadow-float: 0 10px 24px -14px oklch(24.87% 0.0416 295.8 / 0.40);
-}
 :root {
+  /* brand palette */
+  --lab-mint: #c0eae8;
+  --lab-dark: #343c57;
+  --lab-orange: #ff5126;
+  --lab-orange-1: #ff6039;
+  --lab-yellow: #fff3ab;
+  --lab-teal: #03ada5;
+
+  /* surfaces */
+  --canvas: #f7f8f8;
+  --surface: #ffffff;
+  --inset: #f2f3f4;
+  --hover: rgba(52, 60, 87, 0.06);
+  --selected: var(--lab-mint);
+  --border: rgba(52, 60, 87, 0.13);
+  --border-strong: rgba(52, 60, 87, 0.22);
+  --meter-track: rgba(52, 60, 87, 0.11);
+
+  /* text */
+  --ink: #232a40;
+  --ink-muted: #6a7089;
+  --ink-faint: #81869b;
+
+  /* action and accent */
+  --action: var(--lab-orange);
+  --action-hover: var(--lab-orange-1);
+  --on-action: #ffffff;
+  --accent: var(--lab-teal);
+
+  /* chrome bar */
+  --chrome: var(--lab-dark);
+  --chrome-fg: #ffffff;
+  --chrome-fg-muted: rgba(255, 255, 255, 0.62);
+  --chrome-hover: rgba(255, 255, 255, 0.13);
+  --chrome-height: 56px;
+
+  /* states */
+  --ok: #0b6f69;
+  --ok-tint: #d7f2ef;
+  --warn: #6b5500;
+  --warn-tint: var(--lab-yellow);
+  --danger: #c3350f;
+  --danger-deep: #a82c0b;
+  --danger-tint: #ffe3db;
+
+  --shadow-raised: 0 1px 3px rgba(52, 60, 87, 0.16);
+  --shadow-float: 0 12px 28px rgba(52, 60, 87, 0.26);
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -40,49 +62,26 @@
   --space-7: 32px;
   --space-8: 48px;
   --space-9: 64px;
-  --radius-print: 2px;
   --radius-sm: 3px;
   --radius-md: 4px;
-  --radius-sheet: 8px;
-  --control: 30px;
+  --radius-pill: 28px;
+  --control: 32px;
   --control-sm: 26px;
-  --row: 32px;
-  --rail: 216px;
+  --row: 36px;
   --page-index: 220px;
-  --label-column: 160px;
   --measure: 640px;
   --touch: 44px;
-  --compact: 760px;
-  --seal-sm: 12px;
-  --seal-md: 16px;
-  --seal-lg: 34px;
   --duration-press: 100ms;
   --duration-fast: 150ms;
   --duration-base: 200ms;
-  --duration-slow: 300ms;
-  --duration-exit-fast: 120ms;
   --duration-exit-base: 160ms;
-  --duration-exit-slow: 240ms;
-  --stagger-step: 30ms;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --scale-press: 0.97;
   --scale-float: 0.95;
   --layer-index: 10;
-  --layer-float: 50;
   --layer-dialog: 60;
   --layer-slip: 70;
-  --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Lato", -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
 }
-.title { font-family: var(--font-sans); font-size: 28px; line-height: 34px; font-weight: 600; }
-.heading { font-family: var(--font-sans); font-size: 16px; line-height: 22px; font-weight: 600; }
-.subheading { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 600; }
-.body { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 400; }
-.body-strong { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 600; }
-.label { font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 500; }
-.small { font-family: var(--font-sans); font-size: 12px; line-height: 16px; font-weight: 400; }
-.figure { font-family: var(--font-sans); font-size: 26px; line-height: 30px; font-weight: 600; }
-.code { font-family: var(--font-mono); font-size: 13px; line-height: 20px; font-weight: 400; }
-.meta { font-family: var(--font-mono); font-size: 12px; line-height: 16px; font-weight: 400; }
