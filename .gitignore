@@ -40,3 +40,4 @@ Thumbs.db
 # glimpse
 /glimpse
 /data/
+/opentelemetry-javaagent.jar

@@ -44,6 +44,10 @@ glimpse/
 │   ├── db.go
 │   ├── models.go
 │   └── *.sql.go
+├── Dockerfile               # Multi-stage image build (cross-compiles, no CGO)
+├── .github/workflows/       # ci.yml (vet/test/build), release.yml (binaries + image)
+├── skill/SKILL.md          # Claude Code skill for reading glimpse
+├── LICENSE                  # MIT
 ├── sqlc.yaml                 # SQLC configuration (engine: sqlite)
 ├── go.mod
 ├── Makefile
@@ -69,6 +73,8 @@ glimpse/
 - `make migrate-up` — Apply all pending Goose migrations
 - `make migrate-down` — Roll back the last Goose migration
 - `make run` — Generate code and start the server
+- `make test` — Run `go test ./...`
+- `make agent` — Download the pinned OpenTelemetry Java agent jar (not in git)
 - `make backup` — Copy the .db file with a timestamped name
 
 ## Coding Conventions
