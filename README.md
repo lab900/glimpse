@@ -12,7 +12,9 @@ It is made for two readers:
 - **A person**, through the built-in UI.
 - **An AI agent**, through a plain-text digest of one trace and a small JSON API.
 
-![Overview: endpoints, N+1 suspects, slow queries, errors](docs/screenshots/overview.png)
+![Overview: endpoints, with tabs for N+1 suspects, slow queries and errors](docs/screenshots/overview.png)
+
+![N+1 suspects tab: the repeated statement of each trace](docs/screenshots/nplusone.png)
 
 ![Trace page: waterfall across two services, with the queries of the trace](docs/screenshots/trace.png)
 

@@ -46,7 +46,7 @@
       padding: var(--space-5) var(--space-6) var(--space-8); }
 
   /* page */
-  .page { display: grid; grid-template-columns: minmax(0, 1fr) var(--page-index); column-gap: var(--space-6); }
+  .page { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: var(--space-6); }
   .page.trace { grid-template-columns: minmax(0, 1fr) 320px; }
   .content { min-width: 0; }
   .crumb { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
@@ -69,19 +69,21 @@
   .sec h2 { font: 600 16px/22px var(--font-sans); margin: 0 0 var(--space-2);
       display: flex; align-items: baseline; gap: var(--space-2); }
   .sec h2 small { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
-  .sec-no { font: 400 12px/22px var(--font-mono); color: var(--ink-faint); }
   .sec-sub { margin: 0 0 var(--space-2); color: var(--ink-muted); }
 
   /* page index */
-  .index { position: sticky; top: calc(var(--chrome-height) + var(--space-5)); align-self: start; }
   .index-h { font: 600 11px/16px var(--font-sans); letter-spacing: 0.06em; text-transform: uppercase;
       color: var(--ink-muted); margin-bottom: var(--space-2); }
-  .ix { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--space-2);
-      border-radius: var(--radius-md); color: var(--ink); font-size: 13.5px; }
-  .ix:hover { background: var(--hover); text-decoration: none; }
-  .ix.on { background: var(--selected); font-weight: 600; }
-  .ix-no { font: 400 12px/16px var(--font-mono); color: var(--ink-faint); margin-right: 6px; }
-  .ix .n { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
+  .tabs { display: flex; gap: var(--space-1); margin-top: var(--space-5);
+      border-bottom: 1px solid var(--border-strong); overflow-x: auto; }
+  .tab { display: inline-flex; align-items: center; gap: var(--space-2); height: 40px; padding: 0 var(--space-3);
+      border: 0; background: none; cursor: pointer; white-space: nowrap;
+      font: 400 14px/20px var(--font-sans); color: var(--ink-muted); }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-selected="true"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 -3px var(--action); }
+  .tab .n { min-width: 22px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--hover);
+      font: 600 12px/18px var(--font-sans); color: var(--ink-muted); text-align: center; }
+  .tab .n:empty { display: none; }
 
   /* button */
   .btn { height: var(--control); padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-pill);
@@ -257,7 +259,6 @@
     .sheet { padding: var(--space-4) var(--space-3) var(--space-8); }
     .sec { padding: var(--space-3); }
     .page, .page.trace { grid-template-columns: minmax(0, 1fr); }
-    .index { display: none; }
     .detail { position: static; max-height: none; margin-top: var(--space-7); }
     .plate { grid-template-columns: repeat(2, 1fr); }
     .btn { min-height: var(--touch); }
@@ -292,36 +293,35 @@
       <div><div class="fig" id="f-nplusone">–</div><div class="fig-l">N+1 suspects</div></div>
     </div>
 
-    <section class="sec" id="s-endpoints">
-      <h2><span class="sec-no">01</span>Endpoints <small id="c-endpoints"></small></h2>
+    <div class="tabs" id="tabs" role="tablist" aria-label="Insights">
+      <button class="tab" role="tab" data-tab="endpoints">Endpoints<span class="n" id="i-endpoints"></span></button>
+      <button class="tab" role="tab" data-tab="nplusone">N+1 suspects<span class="n" id="i-nplusone"></span></button>
+      <button class="tab" role="tab" data-tab="slowq">Slow queries<span class="n" id="i-slowq"></span></button>
+      <button class="tab" role="tab" data-tab="errors">Errors<span class="n" id="i-errors"></span></button>
+    </div>
+
+    <section class="sec" id="s-endpoints" data-tab="endpoints">
+      <h2>Endpoints <small id="c-endpoints"></small></h2>
       <div id="endpoints"></div>
     </section>
-    <section class="sec" id="s-traces">
-      <h2><span class="sec-no">02</span>Traces <small id="c-traces"></small></h2>
+    <section class="sec" id="s-traces" data-tab="endpoints">
+      <h2>Traces <small id="c-traces"></small></h2>
       <p class="sec-sub" id="traces-of" hidden></p>
       <div id="traces"></div>
     </section>
-    <section class="sec" id="s-nplusone">
-      <h2><span class="sec-no">03</span>N+1 suspects <small id="c-nplusone"></small></h2>
+    <section class="sec" id="s-nplusone" data-tab="nplusone">
+      <h2>N+1 suspects <small id="c-nplusone"></small></h2>
       <div id="nplusone"></div>
     </section>
-    <section class="sec" id="s-slowq">
-      <h2><span class="sec-no">04</span>Slowest queries <small id="c-slowq"></small></h2>
+    <section class="sec" id="s-slowq" data-tab="slowq">
+      <h2>Slowest queries <small id="c-slowq"></small></h2>
       <div id="slowq"></div>
     </section>
-    <section class="sec" id="s-errors">
-      <h2><span class="sec-no">05</span>Recent errors <small id="c-errors"></small></h2>
+    <section class="sec" id="s-errors" data-tab="errors">
+      <h2>Recent errors <small id="c-errors"></small></h2>
       <div id="errors"></div>
     </section>
   </div>
-  <aside class="index" aria-label="On this page">
-    <div class="index-h">On this page</div>
-    <a class="ix" href="#s-endpoints"><span><span class="ix-no">01</span><span class="ix-t">Endpoints</span></span><span class="dots"></span><span class="n" id="i-endpoints"></span></a>
-    <a class="ix" href="#s-traces"><span><span class="ix-no">02</span><span class="ix-t">Traces</span></span><span class="dots"></span><span class="n" id="i-traces"></span></a>
-    <a class="ix" href="#s-nplusone"><span><span class="ix-no">03</span><span class="ix-t">N+1 suspects</span></span><span class="dots"></span><span class="n" id="i-nplusone"></span></a>
-    <a class="ix" href="#s-slowq"><span><span class="ix-no">04</span><span class="ix-t">Slowest queries</span></span><span class="dots"></span><span class="n" id="i-slowq"></span></a>
-    <a class="ix" href="#s-errors"><span><span class="ix-no">05</span><span class="ix-t">Recent errors</span></span><span class="dots"></span><span class="n" id="i-errors"></span></a>
-  </aside>
 </div>
 
 <div id="trace-page" class="page trace" hidden>
@@ -344,7 +344,7 @@
     </div>
 
     <section class="sec" id="s-waterfall">
-      <h2><span class="sec-no">01</span>Waterfall</h2>
+      <h2>Waterfall</h2>
       <div class="legend">
         <span><span class="wf-bar k-server"></span>Server</span>
         <span><span class="wf-bar k-client"></span>Client</span>
@@ -355,7 +355,7 @@
       <div class="wf-scroll"><div class="wf" id="waterfall"></div></div>
     </section>
     <section class="sec" id="s-queries">
-      <h2><span class="sec-no">02</span>Queries <small id="c-queries"></small></h2>
+      <h2>Queries <small id="c-queries"></small></h2>
       <div id="side-queries"></div>
     </section>
   </div>
@@ -609,7 +609,8 @@ function renderPlan(p) {
   return h + `<div><button class="btn copyxml" data-size="sm">Copy plan ${p.plan_json ? "JSON" : "XML"}</button></div>`;
 }
 
-function attachExplain(container, statements) {
+// items[i] has the statement and, when known, the db_system of button i.
+function attachExplain(container, items) {
   container.querySelectorAll("button.explain").forEach(b => {
     b.onclick = async () => {
       const row = b.closest(".q");
@@ -623,7 +624,8 @@ function attachExplain(container, statements) {
         const r = await fetch("/api/queryplan", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({statement: statements[+b.dataset.x]}),
+          body: JSON.stringify({statement: items[+b.dataset.x].statement,
+                                db_system: items[+b.dataset.x].db_system || undefined}),
         });
         const p = await r.json();
         if (!r.ok) throw new Error(p.detail || p.title || r.status);
@@ -685,7 +687,7 @@ async function loadOverview() {
       <span class="st" data-tone="warn">${n.repetitions}× the same query</span>
       <span class="muted">${fmtMs(n.total_ms)} wasted</span>
       <span class="q-acts">${explainBtn(i)}<a href="${traceURL(n.trace_id)}">View trace</a></span>`),
-    bind: el => { initSqlClamps(el); attachExplain(el, ins.n_plus_one.map(n => n.statement)); },
+    bind: el => { initSqlClamps(el); attachExplain(el, ins.n_plus_one); },
   });
 
   setCount("slowq", ins.slow_queries.length);
@@ -695,7 +697,7 @@ async function loadOverview() {
     render: shown => queryRows(shown, (q, i) => `
       <span class="muted">Avg ${fmtMs(q.avg_ms)} · max ${fmtMs(q.max_ms)} · ${q.calls} call${q.calls > 1 ? "s" : ""} · ${esc(q.db_system)}</span>
       <span class="q-acts">${explainBtn(i)}<a href="${traceURL(q.example_trace)}">View slowest trace</a></span>`),
-    bind: el => { initSqlClamps(el); attachExplain(el, ins.slow_queries.map(q => q.statement)); },
+    bind: el => { initSqlClamps(el); attachExplain(el, ins.slow_queries); },
   });
 
   setCount("errors", ins.errors.length);
@@ -717,7 +719,7 @@ const traceStatus = t => t.error
 function clearTraces() {
   currentEndpoint = null;
   $("traces-of").hidden = true;
-  $("c-traces").textContent = $("i-traces").textContent = "";
+  $("c-traces").textContent = "";
   $("traces").innerHTML = emptyHTML("No endpoint chosen", "Choose a row in Endpoints to list its recent traces.");
 }
 
@@ -864,7 +866,8 @@ function renderSideQueries(spans) {
   for (const s of spans) {
     const sql = (s.attrs || {})["db.statement"] || (s.attrs || {})["db.query.text"];
     if (!sql) continue;
-    (groups[sql] ??= {statement: sql, count: 0, totalMs: 0}).count++;
+    const dbSystem = (s.attrs || {})["db.system.name"] || (s.attrs || {})["db.system"];
+    (groups[sql] ??= {statement: sql, db_system: dbSystem, count: 0, totalMs: 0}).count++;
     groups[sql].totalMs += s.duration_ms;
   }
   const list = Object.values(groups).sort((a, b) => b.count - a.count);
@@ -876,7 +879,7 @@ function renderSideQueries(spans) {
       ${g.count >= 5 ? `<span class="st" data-tone="warn">${g.count}× · possible N+1</span>` : `<span>${g.count}×</span>`}
       <span class="muted">${fmtMs(g.totalMs)}</span>
       <span class="q-acts">${explainBtn(i)}</span>`),
-    bind: el => { initSqlClamps(el); attachExplain(el, list.map(g => g.statement)); },
+    bind: el => { initSqlClamps(el); attachExplain(el, list); },
   });
 }
 
@@ -928,6 +931,11 @@ document.addEventListener("keydown", e => {
   if (t.matches?.("input, textarea, select")) return;
   const key = e.key.toLowerCase();
   if (key === "j" || key === "k") {
+    if (!$("index-page").hidden) {
+      const i = TABS.indexOf(currentTab()) + (key === "j" ? 1 : -1);
+      showTab(TABS[Math.min(Math.max(i, 0), TABS.length - 1)]);
+      return;
+    }
     const secs = visibleSections();
     const cur = currentSection(secs);
     const next = key === "j" ? Math.min(cur + 1, secs.length - 1) : Math.max(cur - 1, 0);
@@ -940,16 +948,39 @@ document.addEventListener("keydown", e => {
   }
 });
 
-// The page index follows the scroll position.
-let indexFrame = 0;
-addEventListener("scroll", () => {
-  if (indexFrame || $("index-page").hidden) return;
-  indexFrame = requestAnimationFrame(() => {
-    indexFrame = 0;
-    const cur = Math.max(currentSection(visibleSections()), 0);
-    document.querySelectorAll(".index .ix").forEach((a, i) => a.classList.toggle("on", i === cur));
+/* ============ tabs ============ */
+
+// One tab of the overview is visible at a time. The tab is in the URL hash.
+const TABS = ["endpoints", "nplusone", "slowq", "errors"];
+const currentTab = () => document.querySelector('#tabs .tab[aria-selected="true"]').dataset.tab;
+function showTab(name) {
+  if (!TABS.includes(name)) name = TABS[0];
+  document.querySelectorAll("#tabs .tab").forEach(t => {
+    const on = t.dataset.tab === name;
+    t.setAttribute("aria-selected", on);
+    t.tabIndex = on ? 0 : -1;
   });
-}, {passive: true});
+  document.querySelectorAll("#index-page .sec").forEach(s => {
+    s.hidden = s.dataset.tab !== name;
+    if (!s.hidden) initSqlClamps(s);   // the clamp is measured, so only when visible
+  });
+  // "#tab=" and not the bare name: the name is also an element id, and the browser would scroll to it.
+  history.replaceState(null, "", name === TABS[0] ? location.pathname : "#tab=" + name);
+}
+function initTabs() {
+  const tabs = [...document.querySelectorAll("#tabs .tab")];
+  tabs.forEach((t, i) => {
+    t.onclick = () => showTab(t.dataset.tab);
+    t.onkeydown = e => {
+      const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!step) return;
+      const next = tabs[(i + step + tabs.length) % tabs.length];
+      next.click();
+      next.focus();
+    };
+  });
+  showTab(location.hash.replace("#tab=", ""));
+}
 
 /* ============ router ============ */
 
@@ -960,7 +991,7 @@ if (traceMatch) {
 } else {
   $("index-page").hidden = false;
   $("nav-overview").classList.add("on");
-  document.querySelector(".index .ix").classList.add("on");
+  initTabs();
   renderWindow();
   clearTraces();
   $("wipe").onclick = () => {

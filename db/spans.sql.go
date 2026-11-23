@@ -274,13 +274,13 @@ func (q *Queries) ListErrorSpans(ctx context.Context, startNs int64) ([]ListErro
 }
 
 const listNPlusOne = `-- name: ListNPlusOne :many
-SELECT trace_id, db_statement,
+SELECT trace_id, db_system, db_statement,
     COUNT(*)          AS reps,
     CAST(SUM(duration_ns) AS INTEGER)  AS total_ns,
     CAST(MAX(start_ns) AS INTEGER)     AS last_seen_ns
 FROM spans
 WHERE db_statement != '' AND start_ns >= ?
-GROUP BY trace_id, db_statement
+GROUP BY trace_id, db_system, db_statement
 HAVING COUNT(*) >= 5
 ORDER BY reps DESC
 LIMIT 50
@@ -288,6 +288,7 @@ LIMIT 50
 
 type ListNPlusOneRow struct {
 	TraceID     string
+	DbSystem    string
 	DbStatement string
 	Reps        int64
 	TotalNs     int64
@@ -305,6 +306,7 @@ func (q *Queries) ListNPlusOne(ctx context.Context, startNs int64) ([]ListNPlusO
 		var i ListNPlusOneRow
 		if err := rows.Scan(
 			&i.TraceID,
+			&i.DbSystem,
 			&i.DbStatement,
 			&i.Reps,
 			&i.TotalNs,

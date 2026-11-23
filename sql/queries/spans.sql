@@ -38,13 +38,13 @@ WHERE trace_id = ?
 ORDER BY start_ns ASC;
 
 -- name: ListNPlusOne :many
-SELECT trace_id, db_statement,
+SELECT trace_id, db_system, db_statement,
     COUNT(*)          AS reps,
     CAST(SUM(duration_ns) AS INTEGER)  AS total_ns,
     CAST(MAX(start_ns) AS INTEGER)     AS last_seen_ns
 FROM spans
 WHERE db_statement != '' AND start_ns >= ?
-GROUP BY trace_id, db_statement
+GROUP BY trace_id, db_system, db_statement
 HAVING COUNT(*) >= 5
 ORDER BY reps DESC
 LIMIT 50;

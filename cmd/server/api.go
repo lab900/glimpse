@@ -89,6 +89,7 @@ type GetTraceOutput struct {
 
 type NPlusOne struct {
 	TraceID   string  `json:"trace_id"`
+	DbSystem  string  `json:"db_system"`
 	Statement string  `json:"statement"`
 	Reps      int64   `json:"repetitions"`
 	TotalMs   float64 `json:"total_ms"`
@@ -253,6 +254,7 @@ func registerAPI(api huma.API, database *sql.DB, queries *gendb.Queries) {
 		for _, r := range nplus {
 			out.Body.NPlusOne = append(out.Body.NPlusOne, NPlusOne{
 				TraceID:   r.TraceID,
+				DbSystem:  r.DbSystem,
 				Statement: r.DbStatement,
 				Reps:      r.Reps,
 				TotalMs:   ms(r.TotalNs),
