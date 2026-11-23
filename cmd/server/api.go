@@ -8,7 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	gendb "github.com/coruben/glimpse/db"
+	gendb "github.com/lab900-luis-santos/glimpse/db"
 )
 
 type WindowInput struct {

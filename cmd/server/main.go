@@ -21,8 +21,8 @@ import (
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 
-	glimpse "github.com/coruben/glimpse"
-	gendb "github.com/coruben/glimpse/db"
+	glimpse "github.com/lab900-luis-santos/glimpse"
+	gendb "github.com/lab900-luis-santos/glimpse/db"
 )
 
 //go:embed ui

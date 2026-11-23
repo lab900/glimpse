@@ -18,7 +18,7 @@ import (
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
-	gendb "github.com/coruben/glimpse/db"
+	gendb "github.com/lab900-luis-santos/glimpse/db"
 )
 
 const maxBodyBytes = 32 << 20 // 32 MiB per export request

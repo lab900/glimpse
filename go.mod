@@ -1,4 +1,4 @@
-module github.com/coruben/glimpse
+module github.com/lab900-luis-santos/glimpse
 
 go 1.25.7
 
