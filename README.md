@@ -55,13 +55,13 @@ linux/amd64 and linux/arm64. The image runs as a non-root user and keeps its
 database in the `/data` volume.
 
 ```sh
-docker build --build-arg VERSION=v0.2.0 -t glimpse:0.2.0 https://github.com/lab900/glimpse.git#v0.2.0
+docker build --build-arg VERSION=v0.3.0 -t glimpse:0.3.0 https://github.com/lab900/glimpse.git#v0.3.0
 ```
 
 ```yaml
 services:
   glimpse:
-    image: glimpse:0.2.0
+    image: glimpse:0.3.0
     ports: ["127.0.0.1:4318:4318"]
     volumes: ["glimpse-data:/data"]
     # environment:
@@ -186,7 +186,7 @@ Everything is on one port.
 
 | Path | What it is |
 | --- | --- |
-| `/` | UI: endpoints, traces, N+1 suspects, slowest queries, recent errors |
+| `/` | UI with tabs: endpoints and their traces, N+1 suspects, slow queries, errors |
 | `/trace/{traceId}` | Trace page: waterfall, span details, queries. The URL is shareable. |
 | `POST /v1/traces` | OTLP/HTTP ingest |
 | `GET /api/endpoints` | Calls, errors, avg, p50, p95 and max per endpoint |
