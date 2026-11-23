@@ -7,6 +7,12 @@ in SQLite, and serves insights (`cmd/server/api.go`) plus an embedded UI
 run on startup — the binary is self-contained. Default port is 4318 (the OTLP
 standard) so agents need no port config. See README.md for usage.
 
+The UI follows the Quire design system. `cmd/server/ui/tokens.css` and
+`cmd/server/ui/fonts/` are copies from Quire; use its tokens by name, never raw
+values. Light only.
+
+Quire version: 3
+
 ## Architecture
 
 This is a Go API built with three composable tools and SQLite:

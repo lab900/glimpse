@@ -1,3 +1,6 @@
+// SQL Server's self-signed certificates often have a negative serial number,
+// which Go 1.23+ rejects during the TLS handshake.
+//go:debug x509negativeserial=1
 package main
 
 import (
@@ -22,7 +25,7 @@ import (
 	gendb "github.com/coruben/glimpse/db"
 )
 
-//go:embed ui/index.html
+//go:embed ui
 var uiFS embed.FS
 
 func main() {

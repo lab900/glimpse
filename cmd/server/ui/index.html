@@ -4,277 +4,416 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>glimpse</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/tokens.css">
 <style>
-  /* Dual palette: one green (data) + one amber (errors). Nothing else. */
-  :root {
-    color-scheme: light;
-    --page: #ece7d4; --surface: #f5f1e2;
-    --ink: #16351f; --ink-2: #3c5c44; --muted: #7a8a76;
-    --grid: #d3ccb2; --baseline: #a8a488;
-    --accent: #1c7a3d; --accent-dim: #6fa480;
-    --alert: #a35200;
-    --shadow: rgba(22, 53, 31, .25);
-    --wash: rgba(22, 53, 31, .06);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --page: #090c09; --surface: #0e130e;
-      --ink: #bce8c4; --ink-2: #83b58e; --muted: #4d7355;
-      --grid: #1d2b1f; --baseline: #2f4733;
-      --accent: #46e07c; --accent-dim: #2a7a48;
-      --alert: #ffb000;
-      --shadow: rgba(0, 0, 0, .6);
-      --wash: rgba(70, 224, 124, .07);
-    }
-  }
+  /* Quire, version 3: every value comes from /tokens.css. Light only. */
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
+  html, body { background: var(--ground); }
   body {
-    margin: 0; background: var(--page); color: var(--ink);
-    font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    margin: 0; color: var(--ink); font: 400 14px/20px var(--font-sans);
+    -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
   }
-  @media (prefers-color-scheme: dark) {
-    body::after {
-      content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 99;
-      background: repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 1px, transparent 1px 3px);
-    }
+  a { color: var(--violet); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  :focus-visible { outline: none; box-shadow: 0 0 0 1px var(--violet), 0 0 0 4px var(--halo); }
+  code { font: 400 13px/20px var(--font-mono); }
+  .small { font: 400 12px/16px var(--font-sans); }
+  .muted { color: var(--ink-muted); }
+  .faint { color: var(--ink-faint); }
+  .danger-text { color: var(--danger); }
+  .dots {
+    flex: 1; align-self: center; height: 2px; margin: 6px 2px 0; min-width: 12px;
+    background-image: radial-gradient(circle, var(--rule) .8px, transparent 1px);
+    background-size: 5px 2px; background-repeat: repeat-x;
   }
-  header {
-    display: flex; align-items: baseline; gap: 16px;
-    padding: 14px 20px; border-bottom: 2px solid var(--ink);
-  }
-  header h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: .06em; }
-  header h1 a { color: inherit; text-decoration: none; }
-  header h1::before { content: "> "; color: var(--accent); }
-  #cursor { display: inline-block; width: 8px; height: 13px; background: var(--accent);
-      vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
-  header .sub { color: var(--muted); font-size: 12px; }
-  header select {
-    margin-left: auto; background: var(--surface); color: var(--ink);
-    border: 2px solid var(--ink); border-radius: 0; padding: 3px 8px; font: inherit;
-  }
-  header button { box-shadow: none; padding: 3px 8px; }
-  header button::before { content: "✕ "; color: var(--alert); }
-  main { margin: 0; padding: 24px 28px; display: grid; gap: 24px; }
-  main.trace-layout { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); align-items: start; }
-  aside { display: grid; gap: 20px; }
-  section {
-    background: var(--surface); border: 2px solid var(--ink);
-    box-shadow: 5px 5px 0 var(--shadow);
-    padding: 14px 16px; overflow-x: auto;
-  }
-  h2 { font-size: 12px; margin: 0 0 12px; color: var(--ink-2); font-weight: 700;
-       letter-spacing: .1em; text-transform: uppercase; cursor: pointer; user-select: none; }
-  h2::before { content: "["; color: var(--accent); margin-right: 6px; }
-  h2::after  { content: "] ▾"; color: var(--accent); margin-left: 6px; }
-  section.collapsed h2 { margin-bottom: 0; }
-  section.collapsed h2::after { content: "] ▸"; }
-  section.collapsed > *:not(h2) { display: none !important; }
-  table { border-collapse: collapse; width: 100%; }
-  th { text-align: left; color: var(--muted); font-weight: 700; font-size: 11px;
-       text-transform: uppercase; letter-spacing: .08em;
-       border-bottom: 2px solid var(--baseline); padding: 4px 12px 4px 0; }
-  td { padding: 5px 12px 5px 0; border-bottom: 1px dashed var(--grid);
-       font-variant-numeric: tabular-nums; white-space: nowrap; }
-  tr.click { cursor: pointer; }
-  tr.click:hover td { background: var(--ink); color: var(--page); }
-  tr.click:hover td .mini-track { border-color: var(--page); }
-  tr.click:hover td .mini-bar { background: var(--page); }
-  .num { text-align: right; }
-  th.num { text-align: right; }
-  .err { color: var(--alert); font-weight: 700; }
-  .err::before { content: "✕ "; }
-  .ok { color: var(--muted); }
-  .empty { color: var(--muted); padding: 6px 0; }
-  code { font: inherit; font-size: 12px; color: var(--ink-2); }
-  code::before { content: "`"; color: var(--muted); }
-  code::after  { content: "`"; color: var(--muted); }
-  a.back { color: var(--ink-2); font-size: 12px; text-decoration: none; cursor: pointer; }
-  a.back::before { content: "← "; color: var(--accent); }
-  a.back:hover { background: var(--ink); color: var(--page); }
-  button {
-    font: inherit; font-size: 12px; background: var(--surface); color: var(--ink);
-    border: 2px solid var(--ink); border-radius: 0; padding: 4px 10px; cursor: pointer;
-    box-shadow: 2px 2px 0 var(--shadow); text-align: left;
-  }
-  button:hover { background: var(--ink); color: var(--page); }
-  button:active { box-shadow: none; transform: translate(2px, 2px); }
-  button::before { content: "▸ "; color: var(--accent); }
-  button:hover::before { color: var(--page); }
+  .seal { display: block; flex: none; }
+  .name { display: inline-flex; align-items: center; gap: var(--space-2); }
 
-  .pix { background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 6px); }
-  .pix.error { background: repeating-linear-gradient(90deg, var(--alert) 0 4px, transparent 4px 6px); }
+  /* window: rail on the ground, one sheet */
+  .window { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
+  .rail { position: sticky; top: 0; height: 100vh; padding: var(--space-5); }
+  .brand { display: flex; align-items: center; gap: 9px; font: 700 17px/22px var(--font-sans);
+      color: var(--ink); margin-bottom: var(--space-6); }
+  .brand:hover { text-decoration: none; }
+  .nv { display: flex; align-items: center; height: 28px; padding: 0 var(--space-2);
+      margin: 0 calc(var(--space-2) * -1); border-radius: var(--radius-md);
+      font: 500 13px/18px var(--font-sans); color: var(--ink-muted); }
+  .nv:hover { color: var(--ink); text-decoration: none; }
+  .nv.on { background: var(--sheet); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-sheet); }
+  .sheet { margin: 10px 10px 10px 0; min-width: 0; background: var(--sheet);
+      border-radius: var(--radius-sheet); box-shadow: var(--shadow-sheet);
+      padding: var(--space-7) var(--space-8) var(--space-7) var(--space-9); }
 
-  .mini-track { position: relative; width: 160px; height: 8px; display: inline-block;
-      border: 1px solid var(--baseline); vertical-align: 0; }
-  .mini-bar { position: absolute; left: 0; top: 0; height: 100%; min-width: 4px; }
+  /* page */
+  .page { display: grid; grid-template-columns: minmax(0, 1fr) var(--page-index); column-gap: var(--space-8); }
+  .page.trace { grid-template-columns: minmax(0, 1fr) 320px; }
+  .content { min-width: 0; }
+  .crumb { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
+  .crumb a { color: var(--ink-faint); }
+  .head { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-2) 0 2px; }
+  .title { font: 600 28px/34px var(--font-sans); margin: 0; text-wrap: balance; overflow-wrap: anywhere; }
+  .page-meta { color: var(--ink-muted); overflow-wrap: anywhere; }
+  .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: var(--space-4); }
+  .hint { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); margin: var(--space-2) 0 0;
+      max-width: var(--measure); text-wrap: pretty; }
+  .plate { margin-top: var(--space-6); background: var(--cinnamon-plate); border-radius: var(--radius-md);
+      padding: var(--space-4) var(--space-5); display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-5); }
+  .fig { font: 600 26px/30px var(--font-sans); }
+  .fig-l { font: 400 12px/16px var(--font-sans); }
+  .sec { position: relative; margin-top: var(--space-7); scroll-margin-top: var(--space-6); }
+  .sec h2 { font: 600 16px/22px var(--font-sans); margin: 0 0 var(--space-2);
+      display: flex; align-items: baseline; gap: var(--space-2); }
+  .sec h2 small { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
+  .sec-no { position: absolute; left: -40px; font: 400 12px/22px var(--font-mono); color: var(--ink-faint); }
+  .sec-sub { margin: 0 0 var(--space-2); color: var(--ink-muted); }
 
-  /* ---- trace page ---- */
-  .trace-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px; margin: 10px 0 14px; }
-  .trace-head .title { font-size: 14px; font-weight: 700; }
-  .trace-head .meta { color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .legend { display: flex; gap: 18px; font-size: 11px; color: var(--ink-2);
-      text-transform: uppercase; letter-spacing: .06em; margin: 0 0 8px; }
-  .legend .sw { display: inline-block; width: 22px; height: 8px; margin-right: 6px; vertical-align: 0; }
+  /* page index */
+  .index { position: sticky; top: var(--space-7); align-self: start;
+      border-top: 1px solid var(--ink); padding-top: var(--space-2); }
+  .index-h { font: 500 13px/18px var(--font-sans); color: var(--ink-muted); margin-bottom: var(--space-1); }
+  .ix { display: flex; align-items: center; gap: 6px; height: 26px; color: var(--ink-muted); font-size: 13px; }
+  .ix:hover { color: var(--ink); text-decoration: none; }
+  .ix.on { color: var(--ink); font-weight: 600; }
+  .ix.on .ix-t { box-shadow: inset 0 -2px var(--violet); }
+  .ix-no { font: 400 12px/16px var(--font-mono); color: var(--ink-faint); margin-right: 6px; }
+  .ix .n { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
 
-  /* sidebar */
-  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 12px; }
-  .kv dt { color: var(--muted); }
-  .kv dd { margin: 0; overflow-wrap: anywhere; white-space: normal; font-variant-numeric: tabular-nums; }
-  .side-actions { display: grid; gap: 8px; }
-  .side-hint { color: var(--muted); font-size: 11px; margin-top: 10px; white-space: normal; }
-  .qrow { border-bottom: 1px dashed var(--grid); padding: 8px 0; font-size: 12px; white-space: normal; }
-  .qrow:last-child { border-bottom: none; }
-  .qhead { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
-  .qhead .qmeta { color: var(--ink-2); font-variant-numeric: tabular-nums; }
-  .qhead .cta { margin-left: auto; }
-  .qrow.hot .qmeta { color: var(--alert); font-weight: 700; }
-  pre.sql { margin: 6px 0 0; padding: 6px 10px; font: inherit; font-size: 11.5px;
-      line-height: 1.5; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere;
-      border-left: 2px solid var(--baseline); background: var(--wash); }
-  pre.sql.clamped { display: -webkit-box; -webkit-line-clamp: 10; -webkit-box-orient: vertical;
-      overflow: hidden; }
-  a.more { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--ink-2); cursor: pointer; }
-  a.more::before { content: "▸ "; color: var(--accent); }
-  a.more:hover { background: var(--ink); color: var(--page); }
-  .plan { margin-top: 8px; border-top: 1px dashed var(--grid); padding-top: 8px; white-space: normal; }
-  .plan .qmeta { margin-bottom: 4px; }
-  .plan button { margin-top: 6px; font-size: 11px; padding: 2px 8px; }
+  /* button */
+  .btn { height: var(--control); padding: 0 10px; border: 0; border-radius: var(--radius-md);
+      display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
+      font: 500 13px/18px var(--font-sans); white-space: nowrap; background: var(--fill); color: var(--ink);
+      transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out),
+                  scale var(--duration-press) var(--ease-out); }
+  .btn:hover { background: var(--ground); }
+  .btn:active { scale: var(--scale-press); }
+  .btn[data-kind="primary"] { background: var(--violet); color: var(--on-violet); }
+  .btn[data-kind="primary"]:hover { background: var(--violet-deep); }
+  .btn[data-kind="tertiary"] { background: transparent; color: var(--ink-muted); }
+  .btn[data-kind="tertiary"]:hover { background: var(--fill); color: var(--ink); }
+  .btn[data-kind="danger"] { background: var(--danger); color: var(--on-violet); }
+  .btn[data-kind="danger"]:hover { background: var(--danger-deep); }
+  .btn[data-size="sm"] { height: var(--control-sm); padding: 0 8px; font-size: 12.5px; }
+  .key { font: 400 12px/16px var(--font-mono); color: var(--ink-muted); }
+  .btn[data-kind="primary"] .key, .btn[data-kind="danger"] .key { color: var(--on-violet); }
+  .link { border: 0; background: none; padding: 0; cursor: pointer; font: 400 13px/18px var(--font-sans); color: var(--violet); }
+  .link:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .more-rows { margin-top: var(--space-2); }
 
-  /* ---- waterfall ---- */
-  .wf { min-width: 600px; }
-  .wf-row {
-    display: grid; grid-template-columns: minmax(240px, 34%) 1fr 84px;
-    align-items: center; min-height: 24px; cursor: pointer;
-  }
-  .wf-row[data-i]:hover { background: var(--wash); }
-  .wf-row.selected { background: var(--wash); box-shadow: inset 2px 0 0 var(--accent); }
-  .wf-row.iserror .txt { color: var(--alert); }
-  .wf-axis { min-height: 20px; align-items: end; cursor: default; }
-  .wf-axis .tick { position: absolute; transform: translateX(-50%); font-size: 10px;
-      color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .wf-axis .tick.first { transform: none; }
-  .wf-axis .tick.last { transform: translateX(-100%); }
-  .wf-label {
-    display: flex; align-items: center; gap: 7px; font-size: 12px;
-    overflow: hidden; white-space: nowrap; padding-right: 12px;
-  }
+  /* written options */
+  .opts { display: flex; gap: var(--space-3); align-items: center; height: var(--control); margin-right: var(--space-4); }
+  .opt { border: 0; background: none; padding: 0; cursor: pointer; font: 400 14px/20px var(--font-sans); color: var(--ink-faint); }
+  .opt:hover { color: var(--ink); }
+  .opt[aria-checked="true"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px var(--violet); }
+
+  /* table */
+  .tbl-wrap { overflow-x: auto; }
+  .tbl { width: 100%; border-collapse: collapse; }
+  .tbl th { font: 500 13px/18px var(--font-sans); color: var(--ink-muted); text-align: left; white-space: nowrap;
+      padding: 8px 10px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }
+  .tbl td { height: var(--row); padding: 0 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .tbl .r { text-align: right; }
+  .tbl td.r { font: 400 13px var(--font-mono); }
+  .tbl td.wrap { white-space: normal; min-width: 200px; }
+  .tbl tr.click { cursor: pointer; }
+  .tbl tr.click:hover td { background: var(--fill); }
+  .tbl tr.sel td, .tbl tr.sel:hover td { background: var(--cinnamon-tint); }
+
+  /* status */
+  .st { font-weight: 500; white-space: nowrap; }
+  .st::before { content: "● "; }
+  .st[data-tone="ok"] { color: var(--ok); }
+  .st[data-tone="warn"] { color: var(--warn); }
+  .st[data-tone="danger"] { color: var(--danger); }
+
+  /* relative duration, drawn like progress dots */
+  .bar { position: relative; display: block; width: 160px; height: 2px;
+      background-image: radial-gradient(circle, var(--rule) .8px, transparent 1px); background-size: 5px 2px; }
+  .bar i { position: absolute; inset: 0 auto 0 0; min-width: 5px;
+      background-image: radial-gradient(circle, var(--ink) 1px, transparent 1.2px); background-size: 5px 2px; }
+  .bar i.error { background-image: radial-gradient(circle, var(--danger) 1px, transparent 1.2px); }
+
+  /* empty */
+  .empty { max-width: 420px; padding: var(--space-2) 0; }
+  .empty b { display: block; font-weight: 600; }
+  .empty span { display: block; color: var(--ink-faint); }
+
+  /* queries */
+  .q { padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+  .q-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-height: var(--control-sm); }
+  .q-acts { margin-left: auto; display: flex; align-items: center; gap: var(--space-3); }
+  pre.sql { margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-3); font: 400 13px/20px var(--font-mono);
+      color: var(--ink); background: var(--fill); border-radius: var(--radius-print);
+      white-space: pre-wrap; overflow-wrap: anywhere; }
+  pre.sql.clamped { display: -webkit-box; -webkit-line-clamp: 10; -webkit-box-orient: vertical; overflow: hidden; }
+  .q .link.more { margin-top: var(--space-1); }
+  .plan { margin-top: var(--space-2); }
+  .plan > * + * { margin-top: var(--space-2); }
+
+  /* note */
+  .note { background: var(--cinnamon-tint); border-radius: var(--radius-print); padding: 10px 12px; max-width: var(--measure); }
+  .note b { font-weight: 600; color: var(--warn); margin-right: var(--space-2); }
+  .note[data-tone="danger"] { background: var(--danger-tint); }
+  .note[data-tone="danger"] b { color: var(--danger); }
+
+  /* waterfall */
+  .legend { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-2);
+      font: 400 12px/16px var(--font-sans); color: var(--ink-muted); }
+  .legend > span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .wf-bar { position: static; display: inline-block; width: 20px; margin: 0; }
+  .wf-scroll { overflow-x: auto; }
+  .wf { min-width: 560px; }
+  .wf-row { display: grid; grid-template-columns: minmax(200px, 34%) minmax(0, 1fr) 84px; align-items: center; min-height: 28px; }
+  .wf-row[data-i] { cursor: pointer; border-bottom: 1px solid var(--line); }
+  .wf-row[data-i]:hover { background: var(--fill); }
+  .wf-row.selected, .wf-row.selected:hover { background: var(--cinnamon-tint); }
+  .wf-axis { min-height: 24px; border-bottom: 1px solid var(--ink); }
+  .wf-axis .wf-track { border-left-color: transparent; background: none; min-height: 24px; }
+  .tick { position: absolute; bottom: 4px; transform: translateX(-50%); white-space: nowrap;
+      font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
+  .tick.first { transform: none; }
+  .tick.last { transform: translateX(-100%); }
+  .wf-label { display: flex; align-items: center; gap: var(--space-1); font-size: 13px;
+      overflow: hidden; white-space: nowrap; padding-right: var(--space-3); }
   .wf-label .txt { overflow: hidden; text-overflow: ellipsis; }
-  .wf-label .svc { color: var(--muted); font-size: 10px; flex: none; }
-  .tree { color: var(--baseline); flex: none; }
-  .caret { flex: none; color: var(--accent); cursor: pointer; width: 14px; text-align: center; }
-  .caret:hover { background: var(--ink); color: var(--page); }
+  .wf-label .svc { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); flex: none; }
+  .wf-row.iserror .txt { color: var(--danger); }
+  .caret { flex: none; display: grid; place-items: center; width: 16px; height: 16px; padding: 0; border: 0;
+      border-radius: var(--radius-sm); background: none; color: var(--ink-muted); cursor: pointer; }
+  .caret:hover { background: var(--ground); color: var(--ink); }
   .caret.leaf { visibility: hidden; }
-  .hidden-count { color: var(--muted); font-size: 10px; }
+  .caret[aria-expanded="true"] svg { rotate: 90deg; }
+  .hidden-count { flex: none; font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
   .wf-track {
-    position: relative; height: 100%; min-height: 24px; border-left: 1px solid var(--baseline);
+    position: relative; align-self: stretch; min-height: 28px; border-left: 1px solid var(--rule);
     background:
-      linear-gradient(to right, var(--grid) 1px, transparent 1px) no-repeat 25% 0 / 1px 100%,
-      linear-gradient(to right, var(--grid) 1px, transparent 1px) no-repeat 50% 0 / 1px 100%,
-      linear-gradient(to right, var(--grid) 1px, transparent 1px) no-repeat 75% 0 / 1px 100%,
-      linear-gradient(to right, var(--grid) 1px, transparent 1px) no-repeat 100% 0 / 1px 100%;
+      linear-gradient(to right, var(--line) 1px, transparent 1px) no-repeat 25% 0 / 1px 100%,
+      linear-gradient(to right, var(--line) 1px, transparent 1px) no-repeat 50% 0 / 1px 100%,
+      linear-gradient(to right, var(--line) 1px, transparent 1px) no-repeat 75% 0 / 1px 100%,
+      linear-gradient(to right, var(--line) 1px, transparent 1px) no-repeat 100% 0 / 1px 100%;
   }
-  .wf-bar { position: absolute; top: 50%; margin-top: -4px; height: 8px; min-width: 4px; }
-  .wf-bar.k-server   { background: var(--accent); }
-  .wf-bar.k-client   { background: repeating-linear-gradient(90deg, var(--accent-dim) 0 4px, transparent 4px 6px); }
-  .wf-bar.k-internal { background: transparent; border: 1px solid var(--accent-dim); }
-  .wf-bar.k-other    { background: var(--baseline); }
-  .wf-bar.error      { background: var(--alert); border: none; }
-  .wf-dur { text-align: right; font-size: 11.5px; color: var(--ink-2);
-      font-variant-numeric: tabular-nums; padding-left: 10px; }
+  .wf-bar { position: absolute; top: 50%; margin-top: -4px; height: 8px; min-width: 3px; border-radius: 1px; }
+  .wf-bar.k-server   { background: var(--ink); }
+  .wf-bar.k-client   { background-image: radial-gradient(circle, var(--ink) 1px, transparent 1.3px); background-size: 4px 4px; }
+  .wf-bar.k-internal { box-shadow: inset 0 0 0 1px var(--ink-muted); }
+  .wf-bar.k-other    { background: var(--rule); }
+  .wf-bar.error      { background: var(--danger); box-shadow: none; }
+  .wf-dur { text-align: right; padding-left: var(--space-3); font: 400 13px/20px var(--font-mono); color: var(--ink-muted); }
+  .wf-row.iserror .wf-dur { color: var(--danger); }
 
-  @media (max-width: 900px) { main.trace-layout { grid-template-columns: 1fr; } }
+  /* span detail, beside the waterfall */
+  .detail { position: sticky; top: var(--space-7); align-self: start; max-height: calc(100vh - var(--space-9));
+      overflow-y: auto; border-top: 1px solid var(--ink); padding-top: var(--space-2); }
+  .span-name { font: 600 14px/20px var(--font-sans); margin: var(--space-2) 0; overflow-wrap: anywhere; }
+  .kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
+  .kv dt { font: 500 13px/20px var(--font-sans); color: var(--ink-muted); }
+  .kv dd { margin: 0; overflow-wrap: anywhere; }
+  .attrs-h { font: 400 12px/16px var(--font-sans); color: var(--ink-muted); margin: var(--space-5) 0 0; }
+  .attrs { margin: 0; }
+  .attrs dt { margin-top: var(--space-2); color: var(--ink-muted); }
+  .attrs dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+  /* floats: slip and confirm */
+  .float { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius-print); box-shadow: var(--shadow-float); }
+  .slips { position: fixed; right: var(--space-4); bottom: var(--space-4); z-index: var(--layer-slip); display: grid; gap: var(--space-2); }
+  .slip { width: 300px; padding: 0 12px 8px; animation: rise var(--duration-base) var(--ease-out); }
+  .slip.out { animation: shrink var(--duration-exit-base) var(--ease-exit) forwards; }
+  .slip-h { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0 0; font-weight: 600; color: var(--ok); }
+  .slip[data-tone="danger"] .slip-h { color: var(--danger); }
+  .slip-h small { font: 400 12px/16px var(--font-sans); color: var(--ink-faint); }
+  .slip-b { display: flex; align-items: center; gap: 6px; height: 32px; }
+  .scrim { position: fixed; inset: 0; z-index: var(--layer-dialog); display: grid; place-items: center;
+      background: oklch(from var(--ink) l c h / 0.2); animation: fade var(--duration-base) var(--ease-out); }
+  .confirm { width: 360px; padding: 0 14px 12px; animation: grow var(--duration-base) var(--ease-out); }
+  .confirm-h { font: 600 14px/20px var(--font-sans); padding: 12px 0 8px; border-bottom: 1px solid var(--ink); margin-bottom: 4px; }
+  .confirm-r { display: flex; align-items: center; gap: 6px; height: 28px; color: var(--ink-muted); }
+  .confirm-r b { font-weight: 400; color: var(--ink); }
+  .confirm-n { font: 400 12px/16px var(--font-sans); color: var(--danger); margin: 8px 0 12px; }
+  .confirm-a { display: flex; justify-content: flex-end; gap: 6px; }
+  @keyframes fade { from { opacity: 0; } }
+  @keyframes fade-out { to { opacity: 0; } }
+  @keyframes rise { from { opacity: 0; translate: 0 8px; } }
+  @keyframes grow { from { opacity: 0; scale: var(--scale-float); } }
+  @keyframes shrink { to { opacity: 0; scale: var(--scale-float); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn:active { scale: 1; }
+    .slip, .confirm { animation-name: fade; }
+    .slip.out { animation-name: fade-out; }
+  }
+
+  /* below `compact` (760px): see Quire, Small screens */
+  @media (max-width: 759px) {
+    .window { display: block; }
+    .rail { position: fixed; inset: auto 0 0 0; z-index: var(--layer-index); height: calc(var(--touch) + env(safe-area-inset-bottom));
+        padding: 0 var(--space-4) env(safe-area-inset-bottom); display: flex; align-items: center; gap: var(--space-2); background: var(--ground); }
+    .brand { display: none; }
+    .nv { margin: 0; height: 32px; padding: 0 var(--space-3); }
+    .sheet { margin: 0; min-height: 100vh; border-radius: 0; box-shadow: none;
+        padding: var(--space-5) var(--space-4) calc(var(--touch) + var(--space-7)); }
+    .page, .page.trace { grid-template-columns: minmax(0, 1fr); }
+    .index { display: none; }
+    .detail { position: static; max-height: none; margin-top: var(--space-7); }
+    .sec-no { position: static; }
+    .plate { grid-template-columns: repeat(2, 1fr); }
+    .btn { min-height: var(--touch); }
+    .btn .key { display: none; }
+    .opts { width: 100%; }
+    .slips { left: var(--space-4); bottom: calc(var(--touch) + var(--space-4)); }
+    .slip { width: auto; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1><a href="/">glimpse</a><span id="cursor"></span></h1>
-  <span class="sub" id="stats"></span>
-  <select id="window" hidden>
-    <option value="15" selected>last 15 min</option>
-    <option value="60">last hour</option>
-    <option value="360">last 6 hours</option>
-    <option value="1440">last 24 hours</option>
-  </select>
-  <button id="wipe" hidden>wipe db</button>
-</header>
+<div class="window">
+<nav class="rail" aria-label="Main">
+  <a class="brand" href="/"><img src="/favicon.svg" width="20" height="20" alt="">glimpse</a>
+  <a class="nv" id="nav-overview" href="/">Overview</a>
+  <a class="nv" href="/docs">API docs</a>
+</nav>
 
-<main id="index-page" hidden>
-  <section id="traces-section" hidden>
-    <a class="back" id="back2">back to endpoints</a>
-    <h2 id="traces-title" style="margin-top:10px">Recent traces</h2>
-    <table id="traces"></table>
-  </section>
+<main class="sheet">
 
-  <section id="endpoints-section">
-    <h2>Endpoints</h2>
-    <table id="endpoints"></table>
-  </section>
-
-  <section>
-    <h2>N+1 suspects</h2>
-    <div id="nplusone"></div>
-  </section>
-
-  <section>
-    <h2>Slowest queries</h2>
-    <div id="slowq"></div>
-  </section>
-
-  <section>
-    <h2>Recent errors</h2>
-    <table id="errors"></table>
-  </section>
-</main>
-
-<main id="trace-page" class="trace-layout" hidden>
-  <section>
-    <a class="back" href="/">all endpoints</a>
-    <div class="trace-head" id="trace-head"></div>
-    <div class="legend">
-      <span><span class="sw" style="background:var(--accent)"></span>server</span>
-      <span><span class="sw" style="background:repeating-linear-gradient(90deg,var(--accent-dim) 0 4px,transparent 4px 6px)"></span>client</span>
-      <span><span class="sw" style="border:1px solid var(--accent-dim)"></span>internal</span>
-      <span><span class="sw" style="background:var(--baseline)"></span>other</span>
+<div id="index-page" class="page" hidden>
+  <div class="content">
+    <div class="head"><h1 class="title">Overview</h1></div>
+    <div class="page-meta" id="ov-meta">Loading</div>
+    <div class="acts">
+      <div class="opts" id="window" role="radiogroup" aria-label="Time window"></div>
+      <button class="btn" id="wipe">Delete spans</button>
     </div>
-    <div class="wf" id="waterfall"></div>
-  </section>
-  <aside>
-    <section>
-      <h2>Trace</h2>
-      <dl class="kv" id="side-meta"></dl>
+    <div class="plate">
+      <div><div class="fig" id="f-calls">–</div><div class="fig-l">Calls</div></div>
+      <div><div class="fig" id="f-failed">–</div><div class="fig-l">Failed calls</div></div>
+      <div><div class="fig" id="f-endpoints">–</div><div class="fig-l">Endpoints</div></div>
+      <div><div class="fig" id="f-nplusone">–</div><div class="fig-l">N+1 suspects</div></div>
+    </div>
+
+    <section class="sec" id="s-endpoints">
+      <h2><span class="sec-no">01</span>Endpoints <small id="c-endpoints"></small></h2>
+      <div id="endpoints"></div>
     </section>
-    <section>
-      <h2>Feed your AI</h2>
-      <div class="side-actions">
-        <button id="copy-digest">copy digest</button>
-        <button id="copy-id">copy trace id</button>
-        <button id="copy-curl">copy curl command</button>
-      </div>
-      <p class="side-hint">The digest is a plain-text summary of this trace, made
-        for pasting into an AI chat. The curl command fetches the same digest from
-        <code>/api/traces/{id}/digest</code>.</p>
+    <section class="sec" id="s-traces">
+      <h2><span class="sec-no">02</span>Traces <small id="c-traces"></small></h2>
+      <p class="sec-sub" id="traces-of" hidden></p>
+      <div id="traces"></div>
     </section>
-    <section>
-      <h2>Span</h2>
-      <dl class="kv" id="side-span"><dd class="empty" style="grid-column:1/-1">Click a row in the waterfall.</dd></dl>
+    <section class="sec" id="s-nplusone">
+      <h2><span class="sec-no">03</span>N+1 suspects <small id="c-nplusone"></small></h2>
+      <div id="nplusone"></div>
     </section>
-    <section>
-      <h2>Queries in trace</h2>
-      <div id="side-queries"><div class="empty">No database spans.</div></div>
+    <section class="sec" id="s-slowq">
+      <h2><span class="sec-no">04</span>Slowest queries <small id="c-slowq"></small></h2>
+      <div id="slowq"></div>
     </section>
+    <section class="sec" id="s-errors">
+      <h2><span class="sec-no">05</span>Recent errors <small id="c-errors"></small></h2>
+      <div id="errors"></div>
+    </section>
+  </div>
+  <aside class="index" aria-label="On this page">
+    <div class="index-h">On this page</div>
+    <a class="ix" href="#s-endpoints"><span><span class="ix-no">01</span><span class="ix-t">Endpoints</span></span><span class="dots"></span><span class="n" id="i-endpoints"></span></a>
+    <a class="ix" href="#s-traces"><span><span class="ix-no">02</span><span class="ix-t">Traces</span></span><span class="dots"></span><span class="n" id="i-traces"></span></a>
+    <a class="ix" href="#s-nplusone"><span><span class="ix-no">03</span><span class="ix-t">N+1 suspects</span></span><span class="dots"></span><span class="n" id="i-nplusone"></span></a>
+    <a class="ix" href="#s-slowq"><span><span class="ix-no">04</span><span class="ix-t">Slowest queries</span></span><span class="dots"></span><span class="n" id="i-slowq"></span></a>
+    <a class="ix" href="#s-errors"><span><span class="ix-no">05</span><span class="ix-t">Recent errors</span></span><span class="dots"></span><span class="n" id="i-errors"></span></a>
   </aside>
+</div>
+
+<div id="trace-page" class="page trace" hidden>
+  <div class="content">
+    <div class="crumb"><a href="/">Overview</a> / Trace</div>
+    <div class="head"><span id="t-seal"></span><h1 class="title" id="t-title">Loading</h1></div>
+    <div class="page-meta" id="t-meta"></div>
+    <div class="acts">
+      <button class="btn" data-kind="primary" id="copy-digest">Copy digest<span class="key">D</span></button>
+      <button class="btn" id="copy-id">Copy trace ID<span class="key">I</span></button>
+      <button class="btn" id="copy-curl">Copy curl command<span class="key">C</span></button>
+    </div>
+    <p class="hint">The digest is a plain-text summary of this trace, made for an AI chat.
+      The curl command gets the same digest from <code>/api/traces/{id}/digest</code>.</p>
+    <div class="plate">
+      <div><div class="fig" id="f-duration">–</div><div class="fig-l">Duration</div></div>
+      <div><div class="fig" id="f-spans">–</div><div class="fig-l">Spans</div></div>
+      <div><div class="fig" id="f-services">–</div><div class="fig-l">Services</div></div>
+      <div><div class="fig" id="f-errors">–</div><div class="fig-l">Errors</div></div>
+    </div>
+
+    <section class="sec" id="s-waterfall">
+      <h2><span class="sec-no">01</span>Waterfall</h2>
+      <div class="legend">
+        <span><span class="wf-bar k-server"></span>Server</span>
+        <span><span class="wf-bar k-client"></span>Client</span>
+        <span><span class="wf-bar k-internal"></span>Internal</span>
+        <span><span class="wf-bar k-other"></span>Other</span>
+        <span><span class="wf-bar error"></span>Error</span>
+      </div>
+      <div class="wf-scroll"><div class="wf" id="waterfall"></div></div>
+    </section>
+    <section class="sec" id="s-queries">
+      <h2><span class="sec-no">02</span>Queries <small id="c-queries"></small></h2>
+      <div id="side-queries"></div>
+    </section>
+  </div>
+  <aside class="detail" aria-label="Span">
+    <div class="index-h">Span</div>
+    <div id="side-span"><p class="small faint">Choose a row in the waterfall</p></div>
+  </aside>
+</div>
+
 </main>
+</div>
+
+<div class="scrim" id="confirm" hidden>
+  <div class="float confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-h">
+    <div class="confirm-h" id="confirm-h">Delete all spans?</div>
+    <div class="confirm-r"><span>Spans</span><span class="dots"></span><b id="confirm-n"></b></div>
+    <div class="confirm-n">This can't be undone.</div>
+    <div class="confirm-a">
+      <button class="btn" data-kind="tertiary" id="confirm-cancel">Cancel<span class="key">Esc</span></button>
+      <button class="btn" data-kind="danger" id="confirm-ok">Delete spans<span class="key" id="confirm-key"></span></button>
+    </div>
+  </div>
+</div>
+<div class="slips" id="slips" aria-live="polite"></div>
 
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmtMs = v => v >= 1000 ? (v/1000).toFixed(2) + " s" : v >= 10 ? v.toFixed(0) + " ms" : v.toFixed(1) + " ms";
-const fmtTime = iso => new Date(iso).toLocaleTimeString();
-const win = () => $("window").value;
+const fmtNum = v => v.toLocaleString(undefined, {maximumFractionDigits: v < 10 ? 1 : 0});
+const fmtSize = n => n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB";
 const traceURL = id => "/trace/" + encodeURIComponent(id);
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+
+// Relative under a day ("6 min ago"), absolute after.
+function fmtWhen(iso) {
+  const t = new Date(iso), s = (Date.now() - t) / 1000;
+  if (s < 60) return Math.max(0, Math.floor(s)) + " s ago";
+  if (s < 3600) return Math.floor(s / 60) + " min ago";
+  if (s < 86400) return Math.floor(s / 3600) + " h ago";
+  return t.toLocaleString();
+}
+
+/* Quire seal: FNV-1a 32-bit over the UTF-8 ID, modulo 12, picks an ordered
+   pair of the four seal colours. First of the pair fills the lower-right. */
+const SEAL_COLOURS = ["cinnamon", "olive", "violet", "ink"];
+const SEAL_PAIRS = [];
+for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) if (a !== b) SEAL_PAIRS.push([a, b]);
+function fnv1a(s) {
+  let h = 0x811c9dc5;
+  for (const byte of new TextEncoder().encode(s)) h = Math.imul(h ^ byte, 0x01000193);
+  return h >>> 0;
+}
+function seal(id, size) {
+  const [lr, ul] = SEAL_PAIRS[fnv1a(id) % 12];
+  const radius = size >= 34 ? 4 : 3;
+  return `<svg class="seal" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="border-radius:${radius}px" aria-hidden="true">`
+    + `<rect width="${size}" height="${size}" style="fill:var(--${SEAL_COLOURS[ul]})"/>`
+    + `<path d="M0 ${size}L${size} 0V${size}Z" style="fill:var(--${SEAL_COLOURS[lr]})"/></svg>`;
+}
 
 /* Heuristic SQL beautifier for ORM-generated statements (Hibernate etc.):
    strips [brackets], collapses giant select lists, renames t1_0-style aliases
@@ -332,7 +471,7 @@ async function get(url) {
 }
 
 const sqlBlock = sql =>
-  `<pre class="sql clamped">${esc(prettySQL(sql))}</pre><a class="more" hidden>show more</a>`;
+  `<pre class="sql clamped">${esc(prettySQL(sql))}</pre><button class="link more" hidden>Show more</button>`;
 
 // Reveal the show-more link only where the 10-line clamp actually cuts something.
 function initSqlClamps(root) {
@@ -342,162 +481,264 @@ function initSqlClamps(root) {
     if (pre.classList.contains("clamped") && pre.scrollHeight > pre.clientHeight + 2) btn.hidden = false;
     btn.onclick = () => {
       pre.classList.toggle("clamped");
-      btn.textContent = pre.classList.contains("clamped") ? "show more" : "show less";
+      btn.textContent = pre.classList.contains("clamped") ? "Show more" : "Show less";
     };
   });
 }
 
-// Collapsible sections, remembered per title.
-function initCollapsibles() {
-  document.querySelectorAll("section > h2").forEach(h => {
-    const sec = h.parentElement;
-    const key = "glimpse-collapse:" + (h.id || h.textContent.trim());
-    if (localStorage.getItem(key) === "1") sec.classList.add("collapsed");
-    h.onclick = () => {
-      sec.classList.toggle("collapsed");
-      localStorage.setItem(key, sec.classList.contains("collapsed") ? "1" : "0");
-      if (!sec.classList.contains("collapsed")) initSqlClamps(sec);
-    };
-  });
+const emptyHTML = (title, line) => `<div class="empty"><b>${title}</b><span>${line}</span></div>`;
+const setFig = (id, v) => $(id).textContent = v;
+
+// Column titles starting with ">" are number columns (right-aligned, mono).
+const tableHTML = (cols, body) => `<div class="tbl-wrap"><table class="tbl"><thead><tr>${
+  cols.map(h => `<th class="${h.startsWith(">") ? "r" : ""}">${h.replace(">", "")}</th>`).join("")
+}</tr></thead><tbody>${body}</tbody></table></div>`;
+
+// First rows, then "Show N more". Expanded lists stay expanded across refreshes.
+const expanded = new Set();
+function paged(el, key, items, {limit, empty, render, bind = () => {}}) {
+  if (!items.length) { el.innerHTML = empty; return; }
+  const shown = expanded.has(key) ? items : items.slice(0, limit);
+  const rest = items.length - shown.length;
+  el.innerHTML = render(shown) + (rest ? `<button class="link more-rows">Show ${rest} more</button>` : "");
+  bind(el);
+  const more = el.querySelector(":scope > .more-rows");
+  if (more) more.onclick = () => { expanded.add(key); paged(el, key, items, {limit, empty, render, bind}); };
 }
 
-function rows(table, head, items, render, emptyMsg) {
-  if (!items.length) {
-    table.innerHTML = `<tr><td class="empty">${emptyMsg}</td></tr>`;
-    return;
+function setCount(key, n) {
+  $("c-" + key).textContent = n;
+  const ix = $("i-" + key);
+  if (ix) ix.textContent = n;
+}
+
+/* ============ slip and confirm ============ */
+
+function slip(head, what, fact = "", tone = "ok") {
+  const el = document.createElement("div");
+  el.className = "float slip";
+  el.dataset.tone = tone;
+  el.innerHTML = `<div class="slip-h"><span>${esc(head)}</span><small>Just now</small></div>
+    <div class="slip-b"><span>${esc(what)}</span>${fact ? `<span class="dots"></span><span>${esc(fact)}</span>` : ""}</div>`;
+  const slips = $("slips");
+  slips.appendChild(el);
+  while (slips.children.length > 3) slips.firstElementChild.remove();
+  let timer;
+  const leave = () => { el.classList.add("out"); el.addEventListener("animationend", () => el.remove(), {once: true}); };
+  const arm = () => { timer = setTimeout(leave, 5000); };
+  el.onmouseenter = () => clearTimeout(timer);
+  el.onmouseleave = arm;
+  arm();
+}
+
+async function copy(what, getText) {
+  try {
+    const text = await getText();
+    await navigator.clipboard.writeText(text);
+    slip("Copied", what, text.length <= 40 ? text : fmtSize(new Blob([text]).size));
+  } catch (e) {
+    slip("Copy failed", e.message, "", "danger");
   }
-  table.innerHTML = "<tr>" + head.map(h =>
-    `<th class="${h.startsWith(">") ? "num" : ""}">${h.replace(">", "")}</th>`).join("") + "</tr>"
-    + items.map(render).join("");
 }
+
+let confirmReturn = null;
+function openConfirm(onConfirm) {
+  confirmReturn = document.activeElement;
+  $("confirm-key").textContent = isMac ? "⌘↵" : "Ctrl Enter";
+  $("confirm").hidden = false;
+  $("confirm-cancel").focus();
+  $("confirm-ok").onclick = async () => { closeConfirm(); await onConfirm(); };
+}
+function closeConfirm() {
+  $("confirm").hidden = true;
+  confirmReturn?.focus();
+}
+$("confirm-cancel").onclick = closeConfirm;
+$("confirm").addEventListener("keydown", e => {
+  if (e.key === "Escape") closeConfirm();
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("confirm-ok").click();
+});
 
 /* ============ index page ============ */
 
-let currentEndpoint = "";
+const WINDOWS = [[15, "15 min"], [60, "1 hour"], [360, "6 hours"], [1440, "24 hours"]];
+let win = 15;
+let currentEndpoint = null;   // {name, service}
 let plansOn = false;
+let spanTotal = 0;
 
-const explainLink = i => plansOn ? `<a class="back cta explain" data-x="${i}">explain</a>` : "";
+function renderWindow() {
+  $("window").innerHTML = WINDOWS.map(([v, label]) =>
+    `<button class="opt" role="radio" aria-checked="${v === win}" tabindex="${v === win ? 0 : -1}" data-w="${v}">${label}</button>`).join("");
+  const opts = [...$("window").querySelectorAll(".opt")];
+  opts.forEach((b, i) => {
+    b.onclick = () => {
+      win = +b.dataset.w;
+      renderWindow();
+      $("window").querySelector(`[data-w="${win}"]`).focus();
+      loadOverview();
+      if (currentEndpoint) showTraces(currentEndpoint, false);
+    };
+    b.onkeydown = e => {
+      const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (step) opts[(i + step + opts.length) % opts.length].click();
+    };
+  });
+}
+
+const explainBtn = i => plansOn
+  ? `<button class="btn explain" data-kind="tertiary" data-size="sm" data-x="${i}">Explain</button>` : "";
 
 function renderPlan(p) {
-  if (!p.found) return `<div class="empty">${esc(p.reason || p.detail || "no plan found")}</div>`;
-  let h = `<div class="qmeta">plan cache: ${p.execution_count} executions · avg ${fmtMs(p.avg_elapsed_ms)}
-    · ${(p.avg_logical_reads ?? 0).toLocaleString()} pages read/exec</div>`;
+  if (!p.found) return `<div class="small muted">${esc(p.reason || p.detail || "No plan found")}</div>`;
+  let h = `<div class="small muted">Plan cache: ${p.execution_count.toLocaleString()} executions
+    · avg ${fmtMs(p.avg_elapsed_ms)} · ${(p.avg_logical_reads ?? 0).toLocaleString()} pages read per execution</div>`;
   for (const m of p.missing_indexes) {
-    h += `<div><span class="err">missing index</span> on ${esc(m.table)}
-      · predicted ${m.impact_pct.toFixed(0)}% cheaper
+    h += `<div class="note"><b>Missing index</b>On ${esc(m.table)}, predicted ${m.impact_pct.toFixed(0)}% cheaper.
       <pre class="sql">${esc(m.ddl)}</pre></div>`;
   }
-  if (p.warnings.length) h += `<div class="qmeta err">warnings: ${p.warnings.map(esc).join(", ")}</div>`;
+  if (p.warnings.length) h += `<div class="note"><b>Warnings</b>${p.warnings.map(esc).join(", ")}</div>`;
   if (p.operators.length) {
-    h += `<div class="qmeta">${[...p.operators].sort((a, b) => b.count - a.count)
+    h += `<div class="small muted">${[...p.operators].sort((a, b) => b.count - a.count)
       .map(o => esc(o.op) + " ×" + o.count).join(" · ")}</div>`;
   }
-  return h + `<button class="copyxml">copy plan xml</button>`;
+  return h + `<div><button class="btn copyxml" data-size="sm">Copy plan XML</button></div>`;
 }
 
 function attachExplain(container, statements) {
-  container.querySelectorAll("a.explain").forEach(a => {
-    a.onclick = async () => {
-      const row = a.closest(".qrow");
+  container.querySelectorAll("button.explain").forEach(b => {
+    b.onclick = async () => {
+      const row = b.closest(".q");
       const existing = row.querySelector(".plan");
       if (existing) { existing.remove(); return; }
       const panel = document.createElement("div");
       panel.className = "plan";
-      panel.textContent = "querying plan cache…";
+      panel.innerHTML = `<div class="small faint">Reading the plan cache…</div>`;
       row.appendChild(panel);
       try {
         const r = await fetch("/api/queryplan", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({statement: statements[+a.dataset.x]}),
+          body: JSON.stringify({statement: statements[+b.dataset.x]}),
         });
         const p = await r.json();
         if (!r.ok) throw new Error(p.detail || p.title || r.status);
         panel.innerHTML = renderPlan(p);
         const cb = panel.querySelector("button.copyxml");
-        if (cb) copyButton(cb, () => p.plan_xml);
+        if (cb) cb.onclick = () => copy("Plan XML", () => p.plan_xml);
       } catch (e) {
-        panel.innerHTML = `<span class="err">plan lookup failed: ${esc(e.message)}</span>`;
+        panel.innerHTML = `<div class="note" data-tone="danger"><b>Failed</b>The plan lookup failed: ${esc(e.message)}</div>`;
       }
     };
   });
 }
 
+const queryRows = (items, head) => items.map((item, i) => `<div class="q">
+    <div class="q-head">${head(item, i)}</div>
+    ${sqlBlock(item.statement)}
+  </div>`).join("");
+
 async function loadOverview() {
   const [stats, eps, ins] = await Promise.all([
     get("/api/stats"),
-    get(`/api/endpoints?window_minutes=${win()}`),
-    get(`/api/insights?window_minutes=${win()}`),
+    get(`/api/endpoints?window_minutes=${win}`),
+    get(`/api/insights?window_minutes=${win}`),
   ]);
-  $("stats").textContent = stats.total_spans.toLocaleString() + " spans stored";
+  spanTotal = stats.total_spans;
   plansOn = stats.mssql_plans;
+  $("ov-meta").textContent = `${spanTotal.toLocaleString()} spans stored · updates every 10 s`;
 
-  const sorted = [...eps.endpoints].sort((a, b) => b.p95_ms - a.p95_ms);
-  rows($("endpoints"),
-    ["endpoint", "service", ">calls", ">errors", ">avg", ">p50", ">p95", ">max"],
-    sorted,
-    e => `<tr class="click" data-ep="${esc(e.name)}">
-      <td>${esc(e.name)}</td><td>${esc(e.service)}</td>
-      <td class="num">${e.calls}</td>
-      <td class="num ${e.error_count ? "err" : "ok"}">${e.error_count}</td>
-      <td class="num">${fmtMs(e.avg_ms)}</td><td class="num">${fmtMs(e.p50_ms)}</td>
-      <td class="num">${fmtMs(e.p95_ms)}</td><td class="num">${fmtMs(e.max_ms)}</td></tr>`,
-    "No requests in this window. Point your app's OTel agent at this server and make a request.");
-  $("endpoints").querySelectorAll("tr.click").forEach(tr =>
-    tr.onclick = () => showTraces(tr.dataset.ep));
+  const endpoints = [...eps.endpoints].sort((a, b) => b.p95_ms - a.p95_ms);
+  setFig("f-calls", endpoints.reduce((n, e) => n + e.calls, 0).toLocaleString());
+  setFig("f-failed", endpoints.reduce((n, e) => n + e.error_count, 0).toLocaleString());
+  setFig("f-endpoints", endpoints.length.toLocaleString());
+  setFig("f-nplusone", ins.n_plus_one.length.toLocaleString());
 
-  $("nplusone").innerHTML = ins.n_plus_one.length
-    ? ins.n_plus_one.map((n, i) => `<div class="qrow hot">
-        <div class="qhead">
-          <span class="qmeta">${n.repetitions}× the same query · ${fmtMs(n.total_ms)} wasted</span>
-          ${explainLink(i)}
-          <a class="back" href="${traceURL(n.trace_id)}">view trace</a>
-        </div>
-        ${sqlBlock(n.statement)}
-      </div>`).join("")
-    : `<div class="empty">None found. Good.</div>`;
-  initSqlClamps($("nplusone"));
-  attachExplain($("nplusone"), ins.n_plus_one.map(n => n.statement));
+  setCount("endpoints", endpoints.length);
+  paged($("endpoints"), "endpoints", endpoints, {
+    limit: 10,
+    empty: emptyHTML("No requests in this window",
+      "Point your app's OpenTelemetry agent at this server, then make a request."),
+    render: shown => tableHTML(
+      ["Endpoint", "Service", ">Calls", ">Errors", ">Avg ms", ">P50 ms", ">P95 ms ↓", ">Max ms"],
+      shown.map(e => `<tr class="click${currentEndpoint?.name === e.name ? " sel" : ""}" tabindex="0"
+          data-ep="${esc(e.name)}" data-svc="${esc(e.service)}">
+        <td><span class="name">${seal("endpoint/" + e.service + "/" + e.name, 12)}${esc(e.name)}</span></td>
+        <td>${esc(e.service)}</td>
+        <td class="r">${e.calls.toLocaleString()}</td>
+        <td class="r${e.error_count ? " danger-text" : ""}">${e.error_count.toLocaleString()}</td>
+        <td class="r">${fmtNum(e.avg_ms)}</td><td class="r">${fmtNum(e.p50_ms)}</td>
+        <td class="r">${fmtNum(e.p95_ms)}</td><td class="r">${fmtNum(e.max_ms)}</td></tr>`).join("")),
+    bind: el => el.querySelectorAll("tr.click").forEach(tr =>
+      tr.onclick = () => showTraces({name: tr.dataset.ep, service: tr.dataset.svc})),
+  });
 
-  const slow = ins.slow_queries.slice(0, 10);
-  $("slowq").innerHTML = slow.length
-    ? slow.map((q, i) => `<div class="qrow">
-        <div class="qhead">
-          <span class="qmeta">avg ${fmtMs(q.avg_ms)} · max ${fmtMs(q.max_ms)} · ${q.calls} call${q.calls > 1 ? "s" : ""} · ${esc(q.db_system)}</span>
-          ${explainLink(i)}
-          <a class="back" href="${traceURL(q.example_trace)}">view slowest trace</a>
-        </div>
-        ${sqlBlock(q.statement)}
-      </div>`).join("")
-    : `<div class="empty">No database spans in this window.</div>`;
-  initSqlClamps($("slowq"));
-  attachExplain($("slowq"), slow.map(q => q.statement));
+  setCount("nplusone", ins.n_plus_one.length);
+  paged($("nplusone"), "nplusone", ins.n_plus_one, {
+    limit: 5,
+    empty: emptyHTML("No N+1 suspects", "No trace in this window repeats one query many times."),
+    render: shown => queryRows(shown, (n, i) => `
+      <span class="st" data-tone="warn">${n.repetitions}× the same query</span>
+      <span class="muted">${fmtMs(n.total_ms)} wasted</span>
+      <span class="q-acts">${explainBtn(i)}<a href="${traceURL(n.trace_id)}">View trace</a></span>`),
+    bind: el => { initSqlClamps(el); attachExplain(el, ins.n_plus_one.map(n => n.statement)); },
+  });
 
-  rows($("errors"), ["when", "span", "service", "message", "trace"],
-    ins.errors.slice(0, 15),
-    e => `<tr><td>${fmtTime(e.start)}</td><td class="err">${esc(e.name)}</td>
-      <td>${esc(e.service)}</td><td>${esc(e.message || "—")}</td>
-      <td><a class="back" href="${traceURL(e.trace_id)}">${esc(e.trace_id.slice(0, 12))}…</a></td></tr>`,
-    "No errors in this window.");
+  setCount("slowq", ins.slow_queries.length);
+  paged($("slowq"), "slowq", ins.slow_queries, {
+    limit: 5,
+    empty: emptyHTML("No database spans in this window", "Queries show here when your app calls a database."),
+    render: shown => queryRows(shown, (q, i) => `
+      <span class="muted">Avg ${fmtMs(q.avg_ms)} · max ${fmtMs(q.max_ms)} · ${q.calls} call${q.calls > 1 ? "s" : ""} · ${esc(q.db_system)}</span>
+      <span class="q-acts">${explainBtn(i)}<a href="${traceURL(q.example_trace)}">View slowest trace</a></span>`),
+    bind: el => { initSqlClamps(el); attachExplain(el, ins.slow_queries.map(q => q.statement)); },
+  });
+
+  setCount("errors", ins.errors.length);
+  paged($("errors"), "errors", ins.errors, {
+    limit: 10,
+    empty: emptyHTML("No errors in this window", "Spans with an error status show here."),
+    render: shown => tableHTML(["When", "Span", "Service", "Message", "Trace"],
+      shown.map(e => `<tr>
+        <td class="faint">${fmtWhen(e.start)}</td><td>${esc(e.name)}</td><td>${esc(e.service)}</td>
+        <td class="wrap">${esc(e.message || "—")}</td>
+        <td><a class="name" href="${traceURL(e.trace_id)}">${seal("trace/" + e.trace_id, 12)}<code>${esc(e.trace_id.slice(0, 12))}…</code></a></td></tr>`).join("")),
+  });
 }
 
-async function showTraces(endpoint) {
-  currentEndpoint = endpoint;
-  $("traces-section").hidden = false;
-  $("traces-title").textContent = "Recent traces — " + endpoint;
-  const data = await get(`/api/traces?endpoint=${encodeURIComponent(endpoint)}&limit=30&window_minutes=${win()}`);
+const traceStatus = t => t.error
+  ? `<span class="st" data-tone="danger">${t.http_status ? t.http_status + " error" : "Error"}</span>`
+  : `<span class="st" data-tone="ok">${t.http_status || "OK"}</span>`;
+
+function clearTraces() {
+  currentEndpoint = null;
+  $("traces-of").hidden = true;
+  $("c-traces").textContent = $("i-traces").textContent = "";
+  $("traces").innerHTML = emptyHTML("No endpoint chosen", "Choose a row in Endpoints to list its recent traces.");
+}
+
+async function showTraces(ep, scroll = true) {
+  if (currentEndpoint?.name !== ep.name) expanded.delete("traces");
+  currentEndpoint = ep;
+  $("endpoints").querySelectorAll("tr.click").forEach(tr => tr.classList.toggle("sel", tr.dataset.ep === ep.name));
+  $("traces-of").hidden = false;
+  $("traces-of").innerHTML = `Recent traces of <span class="name">${seal("endpoint/" + ep.service + "/" + ep.name, 12)}${esc(ep.name)}</span>`;
+  if (scroll) $("s-traces").scrollIntoView();
+  const data = await get(`/api/traces?endpoint=${encodeURIComponent(ep.name)}&limit=30&window_minutes=${win}`);
   const maxDur = Math.max(...data.traces.map(t => t.duration_ms), 1);
-  rows($("traces"), ["when", ">duration", "", ">status", "trace"],
-    data.traces,
-    t => `<tr class="click" onclick="location.href='${traceURL(t.trace_id)}'">
-      <td>${fmtTime(t.start)}</td>
-      <td class="num">${fmtMs(t.duration_ms)}</td>
-      <td><span class="mini-track"><span class="mini-bar pix ${t.error ? "error" : ""}"
-          style="width:${Math.max(t.duration_ms / maxDur * 100, 4)}%"></span></span></td>
-      <td class="num ${t.error ? "err" : ""}">${t.http_status || (t.error ? "error" : "ok")}</td>
-      <td>${esc(t.trace_id.slice(0, 16))}…</td></tr>`,
-    "No traces in this window.");
-  $("traces-section").scrollIntoView({behavior: "smooth"});
+  setCount("traces", data.traces.length);
+  paged($("traces"), "traces", data.traces, {
+    limit: 10,
+    empty: emptyHTML("No traces in this window", "Choose a longer window, or make a request to this endpoint."),
+    render: shown => tableHTML(["When", ">Duration ms", "", "Status", "Trace"],
+      shown.map(t => `<tr class="click" tabindex="0" data-href="${traceURL(t.trace_id)}">
+        <td class="faint">${fmtWhen(t.start)}</td>
+        <td class="r">${fmtNum(t.duration_ms)}</td>
+        <td><span class="bar"><i class="${t.error ? "error" : ""}" style="width:${t.duration_ms / maxDur * 100}%"></i></span></td>
+        <td>${traceStatus(t)}</td>
+        <td><span class="name">${seal("trace/" + t.trace_id, 12)}<code>${esc(t.trace_id.slice(0, 16))}…</code></span></td></tr>`).join("")),
+    bind: el => el.querySelectorAll("tr[data-href]").forEach(tr => tr.onclick = () => location.href = tr.dataset.href),
+  });
 }
 
 /* ============ trace page ============ */
@@ -505,6 +746,8 @@ async function showTraces(endpoint) {
 const kindClass = k =>
   k === "server" ? "k-server" : k === "client" ? "k-client"
   : k === "internal" ? "k-internal" : "k-other";
+
+const caretSVG = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 4.5 10.5 8 6 11.5Z" fill="currentColor"/></svg>`;
 
 // Order spans depth-first so children sit directly under their parent.
 function treeOrder(spans) {
@@ -544,7 +787,7 @@ function renderWaterfall() {
 
   const axis = `<div class="wf-row wf-axis">
     <div></div>
-    <div class="wf-track" style="border-left-color:transparent">
+    <div class="wf-track">
       ${[0, .25, .5, .75, 1].map(f =>
         `<span class="tick ${f === 0 ? "first" : f === 1 ? "last" : ""}"
           style="left:${f * 100}%">${fmtMs(totalMs * f)}</span>`).join("")}
@@ -561,30 +804,30 @@ function renderWaterfall() {
 
     const left = ((s.start_ns - t0) / totalNs * 100).toFixed(2);
     const width = Math.max(s.duration_ms * 1e6 / totalNs * 100, 0.4).toFixed(2);
-    const guide = depth ? "&nbsp;".repeat((depth - 1) * 2) + "└─" : "";
-    html += `<div class="wf-row ${s.error ? "iserror" : ""} ${i === selected ? "selected" : ""}" data-i="${i}">
-      <div class="wf-label">
-        ${guide ? `<span class="tree">${guide}</span>` : ""}
-        <span class="caret ${childCount ? "" : "leaf"}" data-toggle="${i}">${isCollapsed ? "▸" : "▾"}</span>
+    html += `<div class="wf-row ${s.error ? "iserror" : ""} ${i === selected ? "selected" : ""}" data-i="${i}" tabindex="0">
+      <div class="wf-label" style="padding-left:calc(var(--space-3) * ${depth})">
+        <button class="caret ${childCount ? "" : "leaf"}" data-toggle="${i}" tabindex="${childCount ? 0 : -1}"
+          aria-expanded="${!isCollapsed}" aria-label="${isCollapsed ? "Expand" : "Collapse"}">${caretSVG}</button>
         <span class="txt" title="${esc(s.name)}">${esc(s.name)}</span>
-        ${isCollapsed ? `<span class="hidden-count">+${descendantCount(i)} hidden</span>` : ""}
+        ${isCollapsed ? `<span class="hidden-count">${descendantCount(i)} hidden</span>` : ""}
         ${s.service !== rootSvc ? `<span class="svc">${esc(s.service)}</span>` : ""}
       </div>
       <div class="wf-track">
         <div class="wf-bar ${kindClass(s.kind)} ${s.error ? "error" : ""}"
              style="left:${left}%;width:${width}%"></div>
       </div>
-      <div class="wf-dur ${s.error ? "err" : ""}">${fmtMs(s.duration_ms)}</div>
+      <div class="wf-dur">${fmtMs(s.duration_ms)}</div>
     </div>`;
   });
   $("waterfall").innerHTML = html;
 
-  $("waterfall").querySelectorAll(".caret[data-toggle]:not(.leaf)").forEach(c => {
+  $("waterfall").querySelectorAll(".caret:not(.leaf)").forEach(c => {
     c.onclick = ev => {
       ev.stopPropagation();
       const id = trace.ordered[+c.dataset.toggle].span.span_id;
       trace.collapsed.has(id) ? trace.collapsed.delete(id) : trace.collapsed.add(id);
       renderWaterfall();
+      $("waterfall").querySelector(`.caret[data-toggle="${c.dataset.toggle}"]`).focus();
     };
   });
   $("waterfall").querySelectorAll(".wf-row[data-i]").forEach(row => {
@@ -594,20 +837,22 @@ function renderWaterfall() {
 
 function selectSpan(i) {
   trace.selected = i;
+  $("waterfall").querySelectorAll(".wf-row").forEach(r => r.classList.toggle("selected", r.dataset.i === String(i)));
   const s = trace.ordered[i].span;
   const rowsKV = [
-    ["name", s.name], ["kind", s.kind], ["service", s.service],
-    ["duration", fmtMs(s.duration_ms)],
-    ["offset", fmtMs((s.start_ns - trace.t0) / 1e6)],
-    ["span id", s.span_id],
+    ["Kind", esc(s.kind)], ["Service", esc(s.service)],
+    ["Duration", fmtMs(s.duration_ms)],
+    ["Offset", fmtMs((s.start_ns - trace.t0) / 1e6)],
+    ["Span ID", `<code>${esc(s.span_id)}</code>`],
   ];
-  if (s.error) rowsKV.push(["error", s.status_message || "error"]);
+  if (s.error) rowsKV.push(["Error", `<span class="danger-text">${esc(s.status_message || "Error")}</span>`]);
   const attrs = Object.entries(s.attrs || {});
   $("side-span").innerHTML =
-    rowsKV.map(([k, v]) => `<dt>${esc(k)}</dt><dd${k === "error" ? ' class="err"' : ""}>${esc(v)}</dd>`).join("")
-    + (attrs.length ? `<dt style="grid-column:1/-1;margin-top:8px;border-top:1px dashed var(--grid);padding-top:6px">attributes</dt>` : "")
-    + attrs.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v).slice(0, 300))}</dd>`).join("");
-  renderWaterfall();
+    `<div class="span-name${s.error ? " danger-text" : ""}">${esc(s.name)}</div>
+    <dl class="kv">${rowsKV.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`
+    + (attrs.length ? `<div class="attrs-h">Attributes</div><dl class="attrs">${
+        attrs.map(([k, v]) => `<dt><code>${esc(k)}</code></dt><dd><code>${esc(String(v).slice(0, 300))}</code></dd>`).join("")
+      }</dl>` : "");
 }
 
 function renderSideQueries(spans) {
@@ -615,34 +860,20 @@ function renderSideQueries(spans) {
   for (const s of spans) {
     const sql = (s.attrs || {})["db.statement"] || (s.attrs || {})["db.query.text"];
     if (!sql) continue;
-    (groups[sql] ??= {count: 0, totalMs: 0}).count++;
+    (groups[sql] ??= {statement: sql, count: 0, totalMs: 0}).count++;
     groups[sql].totalMs += s.duration_ms;
   }
-  const list = Object.entries(groups).sort((a, b) => b[1].count - a[1].count);
-  if (!list.length) return;
-  $("side-queries").innerHTML = list.map(([sql, g], i) =>
-    `<div class="qrow ${g.count >= 5 ? "hot" : ""}">
-      <div class="qhead">
-        <span class="qmeta">${g.count}× · ${fmtMs(g.totalMs)}${g.count >= 5 ? " · N+1?" : ""}</span>
-        ${explainLink(i)}
-      </div>
-      ${sqlBlock(sql)}
-    </div>`).join("");
-  initSqlClamps($("side-queries"));
-  attachExplain($("side-queries"), list.map(([sql]) => sql));
-}
-
-function copyButton(btn, getText) {
-  btn.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(await getText());
-      const old = btn.textContent;
-      btn.textContent = "copied!";
-      setTimeout(() => btn.textContent = old, 1200);
-    } catch (e) {
-      btn.textContent = "copy failed";
-    }
-  };
+  const list = Object.values(groups).sort((a, b) => b.count - a.count);
+  $("c-queries").textContent = list.length || "";
+  paged($("side-queries"), "queries", list, {
+    limit: 5,
+    empty: emptyHTML("No database spans", "This trace made no database queries."),
+    render: shown => queryRows(shown, (g, i) => `
+      ${g.count >= 5 ? `<span class="st" data-tone="warn">${g.count}× · possible N+1</span>` : `<span>${g.count}×</span>`}
+      <span class="muted">${fmtMs(g.totalMs)}</span>
+      <span class="q-acts">${explainBtn(i)}</span>`),
+    bind: el => { initSqlClamps(el); attachExplain(el, list.map(g => g.statement)); },
+  });
 }
 
 async function loadTracePage(traceId) {
@@ -663,50 +894,83 @@ async function loadTracePage(traceId) {
   const errors = spans.filter(s => s.error).length;
   const totalMs = trace.totalNs / 1e6;
 
-  document.title = "glimpse — " + root.name;
-  $("stats").textContent = "trace " + trace.id.slice(0, 16) + "…";
-  $("trace-head").innerHTML = `
-    <span class="title">${esc(root.name)}</span>
-    <span class="meta">${fmtMs(totalMs)} · ${spans.length} spans
-      ${errors ? ` · <span class="err">${errors} error${errors > 1 ? "s" : ""}</span>` : ""}</span>`;
-
-  $("side-meta").innerHTML = [
-    ["trace id", trace.id], ["root", root.name],
-    ["start", new Date(root.start).toLocaleString()],
-    ["duration", fmtMs(totalMs)], ["spans", spans.length],
-    ["services", services.join(", ")],
-    ["errors", errors || "none"],
-  ].map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+  document.title = root.name + " · glimpse";
+  $("t-seal").innerHTML = seal("trace/" + trace.id, 34);
+  $("t-title").textContent = root.name;
+  $("t-meta").innerHTML = `${esc(services.join(", "))} · started ${esc(fmtWhen(root.start))} · <code>${esc(trace.id)}</code>`;
+  setFig("f-duration", fmtMs(totalMs));
+  setFig("f-spans", spans.length.toLocaleString());
+  setFig("f-services", services.length);
+  setFig("f-errors", errors);
 
   renderSideQueries(spans);
   renderWaterfall();
 
   const digestURL = location.origin + "/api/traces/" + trace.id + "/digest";
-  copyButton($("copy-digest"), async () => (await fetch(digestURL)).text());
-  copyButton($("copy-id"), () => trace.id);
-  copyButton($("copy-curl"), () => "curl -s " + digestURL);
+  $("copy-digest").onclick = () => copy("Trace digest", async () => (await fetch(digestURL)).text());
+  $("copy-id").onclick = () => copy("Trace ID", () => trace.id);
+  $("copy-curl").onclick = () => copy("Curl command", () => "curl -s " + digestURL);
 }
+
+/* ============ keyboard ============ */
+
+const visibleSections = () => [...document.querySelectorAll(".page:not([hidden]) .sec")];
+const currentSection = secs => secs.findLastIndex(s => s.getBoundingClientRect().top <= 120);
+
+document.addEventListener("keydown", e => {
+  if (!$("confirm").hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (e.key === "Enter" && t.matches?.("tr.click, .wf-row[data-i]")) { t.click(); return; }
+  if (t.matches?.("input, textarea, select")) return;
+  const key = e.key.toLowerCase();
+  if (key === "j" || key === "k") {
+    const secs = visibleSections();
+    const cur = currentSection(secs);
+    const next = key === "j" ? Math.min(cur + 1, secs.length - 1) : Math.max(cur - 1, 0);
+    secs[next]?.scrollIntoView();
+    return;
+  }
+  if (!$("trace-page").hidden) {
+    const btn = {d: "copy-digest", i: "copy-id", c: "copy-curl"}[key];
+    if (btn) $(btn).click();
+  }
+});
+
+// The page index follows the scroll position.
+let indexFrame = 0;
+addEventListener("scroll", () => {
+  if (indexFrame || $("index-page").hidden) return;
+  indexFrame = requestAnimationFrame(() => {
+    indexFrame = 0;
+    const cur = Math.max(currentSection(visibleSections()), 0);
+    document.querySelectorAll(".index .ix").forEach((a, i) => a.classList.toggle("on", i === cur));
+  });
+}, {passive: true});
 
 /* ============ router ============ */
 
-initCollapsibles();
 const traceMatch = location.pathname.match(/^\/trace\/([0-9a-f]+)$/);
 if (traceMatch) {
   $("trace-page").hidden = false;
-  loadTracePage(traceMatch[1]).catch(e => $("stats").textContent = e.message);
+  loadTracePage(traceMatch[1]).catch(e => { $("t-title").textContent = "Trace not loaded"; $("t-meta").textContent = e.message; });
 } else {
   $("index-page").hidden = false;
-  $("window").hidden = false;
-  $("wipe").hidden = false;
-  $("wipe").onclick = async () => {
-    if (!confirm("Delete ALL stored spans?")) return;
-    await fetch("/api/spans", {method: "DELETE"});
-    $("traces-section").hidden = true; currentEndpoint = "";
-    loadOverview();
+  $("nav-overview").classList.add("on");
+  document.querySelector(".index .ix").classList.add("on");
+  renderWindow();
+  clearTraces();
+  $("wipe").onclick = () => {
+    $("confirm-n").textContent = spanTotal.toLocaleString();
+    openConfirm(async () => {
+      const n = spanTotal;
+      await fetch("/api/spans", {method: "DELETE"});
+      slip("Deleted", "Spans", n.toLocaleString());
+      expanded.clear();
+      clearTraces();
+      loadOverview();
+    });
   };
-  $("back2").onclick = () => { $("traces-section").hidden = true; currentEndpoint = ""; };
-  $("window").onchange = loadOverview;
-  loadOverview().catch(e => $("stats").textContent = e.message);
+  loadOverview().catch(e => $("ov-meta").textContent = "Could not load: " + e.message);
   setInterval(() => {
     if (document.querySelector(".plan")) return;   // don't wipe an open plan panel
     loadOverview().catch(() => {});
