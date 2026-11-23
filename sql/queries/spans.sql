@@ -3,7 +3,8 @@ INSERT INTO spans (
     trace_id, span_id, parent_span_id, service, name, kind,
     start_ns, duration_ns, status_code, status_message,
     http_method, http_route, http_status, db_system, db_statement, attrs
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (trace_id, span_id) DO NOTHING;
 
 -- name: ListEndpoints :many
 SELECT service, http_method, http_route, name, kind,
@@ -49,6 +50,8 @@ ORDER BY reps DESC
 LIMIT 50;
 
 -- name: ListSlowQueries :many
+-- With exactly one MAX() in the query, SQLite takes bare columns
+-- (example_trace) from the row that holds the max. AVG/COUNT do not count.
 SELECT db_system, db_statement,
     COUNT(*)                          AS calls,
     CAST(AVG(duration_ns) AS INTEGER) AS avg_ns,
@@ -62,7 +65,7 @@ LIMIT 50;
 
 -- name: ListErrorSpans :many
 SELECT trace_id, service, name, status_message, http_route,
-    start_ns, duration_ns
+    start_ns, duration_ns, attrs
 FROM spans
 WHERE status_code = 2 AND start_ns >= ?
 ORDER BY start_ns DESC
@@ -76,3 +79,9 @@ DELETE FROM spans WHERE start_ns < ?;
 
 -- name: CountSpans :one
 SELECT COUNT(*) FROM spans;
+
+-- name: CountSpansByService :many
+SELECT service, COUNT(*) AS spans
+FROM spans
+GROUP BY service
+ORDER BY spans DESC, service;

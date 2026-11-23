@@ -1,5 +1,6 @@
 // SQL Server's self-signed certificates often have a negative serial number,
 // which Go 1.23+ rejects during the TLS handshake.
+//
 //go:debug x509negativeserial=1
 package main
 
@@ -7,12 +8,16 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -28,6 +33,9 @@ import (
 //go:embed ui
 var uiFS embed.FS
 
+// version is set at build time: -ldflags "-X main.version=1.2.3".
+var version = "dev"
+
 func main() {
 	// Optional .env in the working directory; real env vars win over it.
 	if err := godotenv.Load(); err == nil {
@@ -35,6 +43,7 @@ func main() {
 	}
 
 	dbPath := envOr("DB_PATH", "./data/glimpse.db")
+	host := envOr("HOST", "127.0.0.1")
 	port := envOr("PORT", "4318")
 	retentionHours := envIntOr("RETENTION_HOURS", 24)
 
@@ -42,42 +51,13 @@ func main() {
 		log.Fatalf("cannot create data dir: %v", err)
 	}
 
-	database, err := sql.Open("sqlite", dbPath)
+	database, err := openDB(dbPath)
 	if err != nil {
-		log.Fatalf("cannot open database: %v", err)
+		log.Fatal(err)
 	}
 	defer database.Close()
 
-	// SQLite tuning: WAL for concurrent reads, NORMAL sync is safe with WAL,
-	// busy_timeout avoids "database is locked" under write bursts.
-	for _, pragma := range []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA synchronous=NORMAL",
-		"PRAGMA busy_timeout=5000",
-		"PRAGMA foreign_keys=ON",
-	} {
-		if _, err := database.Exec(pragma); err != nil {
-			log.Fatalf("%s failed: %v", pragma, err)
-		}
-	}
-
-	goose.SetBaseFS(glimpse.Migrations)
-	goose.SetLogger(goose.NopLogger())
-	if err := goose.SetDialect("sqlite3"); err != nil {
-		log.Fatalf("goose dialect: %v", err)
-	}
-	if err := goose.Up(database, "sql/migrations"); err != nil {
-		log.Fatalf("migrations failed: %v", err)
-	}
-
 	queries := gendb.New(database)
-
-	go purgeLoop(database, queries, retentionHours)
-
-	router := http.NewServeMux()
-
-	// OTLP/HTTP ingest — the standard path the OpenTelemetry agents use.
-	router.HandleFunc("POST /v1/traces", handleOTLPTraces(database, queries))
 
 	var mssql *sql.DB
 	if dsn := os.Getenv("GLIMPSE_MSSQL_DSN"); dsn != "" {
@@ -88,15 +68,87 @@ func main() {
 		plansEnabled = true
 	}
 
-	config := huma.DefaultConfig("glimpse", "1.0.0")
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go purgeLoop(ctx, queries, retentionHours)
+
+	ln, err := net.Listen("tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		log.Fatalf("cannot listen: %v", err)
+	}
+	// No write timeout: it would cut slow responses such as big traces.
+	server := &http.Server{
+		Handler:           newRouter(database, queries, mssql),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	addr := ln.Addr().String()
+	log.Printf("glimpse %s listening on %s", version, addr)
+	log.Printf("  database:    %s (retention %dh)", dbPath, retentionHours)
+	log.Printf("  OTLP ingest: http://%s/v1/traces", addr)
+	log.Printf("  UI:          http://%s/", addr)
+	log.Printf("  API docs:    http://%s/docs", addr)
+	if mssql != nil {
+		log.Printf("  MSSQL execution plans enabled")
+	}
+
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- server.Serve(ln) }()
+
+	select {
+	case err := <-serveErr:
+		log.Fatalf("server failed: %v", err)
+	case <-ctx.Done():
+	}
+	log.Printf("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown: %v", err)
+	}
+}
+
+// openDB opens the SQLite file and runs the embedded migrations.
+func openDB(dbPath string) (*sql.DB, error) {
+	// The pragmas go in the DSN because they are per connection and
+	// database/sql opens more than one. WAL for concurrent reads, NORMAL sync
+	// is safe with WAL, busy_timeout avoids "database is locked" under write bursts.
+	dsn := dbPath + "?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)" +
+		"&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
+	database, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open database: %w", err)
+	}
+
+	goose.SetBaseFS(glimpse.Migrations)
+	goose.SetLogger(goose.NopLogger())
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("goose dialect: %w", err)
+	}
+	if err := goose.Up(database, "sql/migrations"); err != nil {
+		database.Close()
+		return nil, fmt.Errorf("migrations failed: %w", err)
+	}
+	return database, nil
+}
+
+// newRouter wires ingest, the API, the digest and the UI.
+func newRouter(database *sql.DB, queries *gendb.Queries, mssql *sql.DB) http.Handler {
+	router := http.NewServeMux()
+
+	// OTLP/HTTP ingest — the standard path the OpenTelemetry agents use.
+	router.HandleFunc("POST /v1/traces", handleOTLPTraces(database, queries))
+
+	config := huma.DefaultConfig("glimpse", version)
 	config.Info.Description = "Tiny trace collector with code insights. " +
 		"Point an OpenTelemetry agent at POST /v1/traces (OTLP/HTTP), " +
 		"then read /api/endpoints, /api/insights, /api/traces."
 	api := humago.New(router, config)
-	registerAPI(api, queries)
+	registerAPI(api, database, queries)
 	if mssql != nil {
 		registerPlanAPI(api, mssql)
-		log.Printf("  MSSQL execution plans enabled")
 	}
 
 	router.HandleFunc("GET /api/traces/{traceId}/digest", handleTraceDigest(queries))
@@ -108,21 +160,26 @@ func main() {
 	router.Handle("/", http.FileServerFS(uiContent))
 	router.HandleFunc("/{$}", serveIndex)
 	router.HandleFunc("GET /trace/{id}", serveIndex)
-
-	log.Printf("glimpse listening on :%s", port)
-	log.Printf("  database:    %s (retention %dh)", dbPath, retentionHours)
-	log.Printf("  OTLP ingest: http://localhost:%s/v1/traces", port)
-	log.Printf("  UI:          http://localhost:%s/", port)
-	log.Printf("  API docs:    http://localhost:%s/docs", port)
-	log.Fatal(http.ListenAndServe(":"+port, router))
+	return router
 }
 
-func purgeLoop(database *sql.DB, queries *gendb.Queries, retentionHours int) {
-	ticker := time.NewTicker(10 * time.Minute)
-	for range ticker.C {
+// purgeLoop purges once at startup, then every 10 minutes until ctx ends.
+func purgeLoop(ctx context.Context, queries *gendb.Queries, retentionHours int) {
+	purge := func() {
 		cutoff := time.Now().Add(-time.Duration(retentionHours) * time.Hour).UnixNano()
-		if err := queries.PurgeOldSpans(context.Background(), cutoff); err != nil {
+		if err := queries.PurgeOldSpans(ctx, cutoff); err != nil && ctx.Err() == nil {
 			log.Printf("purge failed: %v", err)
+		}
+	}
+	purge()
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			purge()
+		case <-ctx.Done():
+			return
 		}
 	}
 }

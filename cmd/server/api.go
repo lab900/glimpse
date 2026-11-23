@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -121,10 +122,18 @@ type InsightsOutput struct {
 	}
 }
 
+type ServiceSpans struct {
+	Service string `json:"service"`
+	Spans   int64  `json:"spans"`
+}
+
 type StatsOutput struct {
 	Body struct {
-		TotalSpans int64 `json:"total_spans"`
-		MssqlPlans bool  `json:"mssql_plans" doc:"True when GLIMPSE_MSSQL_DSN is configured"`
+		Version        string         `json:"version"`
+		TotalSpans     int64          `json:"total_spans"`
+		DBBytes        int64          `json:"db_bytes" doc:"Size of the SQLite database (page_count * page_size)"`
+		SpansByService []ServiceSpans `json:"spans_by_service"`
+		MssqlPlans     bool           `json:"mssql_plans" doc:"True when GLIMPSE_MSSQL_DSN is configured"`
 	}
 }
 
@@ -140,7 +149,7 @@ func tsRFC3339(ns int64) string {
 	return time.Unix(0, ns).UTC().Format(time.RFC3339Nano)
 }
 
-func registerAPI(api huma.API, queries *gendb.Queries) {
+func registerAPI(api huma.API, database *sql.DB, queries *gendb.Queries) {
 	huma.Get(api, "/api/endpoints", func(ctx context.Context, in *WindowInput) (*EndpointsOutput, error) {
 		since := in.sinceNs()
 		rows, err := queries.ListEndpoints(ctx, since)
@@ -274,7 +283,7 @@ func registerAPI(api huma.API, queries *gendb.Queries) {
 				TraceID:    r.TraceID,
 				Service:    r.Service,
 				Name:       r.Name,
-				Message:    r.StatusMessage,
+				Message:    errorText(r.StatusMessage, spanAttrs(r.Attrs)),
 				Route:      r.HttpRoute,
 				Start:      tsRFC3339(r.StartNs),
 				DurationMs: ms(r.DurationNs),
@@ -295,8 +304,24 @@ func registerAPI(api huma.API, queries *gendb.Queries) {
 		if err != nil {
 			return nil, fmt.Errorf("counting spans: %w", err)
 		}
+		var dbBytes int64
+		if err := database.QueryRowContext(ctx,
+			"SELECT (SELECT page_count FROM pragma_page_count) * (SELECT page_size FROM pragma_page_size)",
+		).Scan(&dbBytes); err != nil {
+			return nil, fmt.Errorf("reading database size: %w", err)
+		}
+		byService, err := queries.CountSpansByService(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("counting spans by service: %w", err)
+		}
 		out := &StatsOutput{}
+		out.Body.Version = version
 		out.Body.TotalSpans = total
+		out.Body.DBBytes = dbBytes
+		out.Body.SpansByService = []ServiceSpans{}
+		for _, r := range byService {
+			out.Body.SpansByService = append(out.Body.SpansByService, ServiceSpans{Service: r.Service, Spans: r.Spans})
+		}
 		out.Body.MssqlPlans = plansEnabled
 		return out, nil
 	})

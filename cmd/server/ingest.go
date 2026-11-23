@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"strconv"
 
@@ -44,8 +45,9 @@ func handleOTLPTraces(database *sql.DB, queries *gendb.Queries) http.HandlerFunc
 		}
 
 		req := &coltracepb.ExportTraceServiceRequest{}
-		contentType := r.Header.Get("Content-Type")
-		if contentType == "application/json" {
+		mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		isJSON := mediaType == "application/json"
+		if isJSON {
 			err = protojson.Unmarshal(raw, req)
 		} else {
 			err = proto.Unmarshal(raw, req)
@@ -62,7 +64,7 @@ func handleOTLPTraces(database *sql.DB, queries *gendb.Queries) http.HandlerFunc
 		}
 
 		resp := &coltracepb.ExportTraceServiceResponse{}
-		if contentType == "application/json" {
+		if isJSON {
 			out, _ := protojson.Marshal(resp)
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(out)
@@ -135,7 +137,7 @@ func toParams(service string, span *tracepb.Span) gendb.InsertSpanParams {
 		HttpStatus:    httpStatus,
 		DbSystem:      dbSystem,
 		DbStatement:   statement,
-		Attrs:         attrsJSON(attrs),
+		Attrs:         attrsJSON(attrs, exceptionAttrs(span)),
 	}
 }
 
@@ -179,13 +181,39 @@ func anyValueString(v *commonpb.AnyValue) string {
 	}
 }
 
-func attrsJSON(attrs []*commonpb.KeyValue) string {
-	if len(attrs) == 0 {
+// exceptionAttrs returns exception.type and exception.message of the first
+// exception event. The OTel Java agent records exceptions as span events.
+// The stacktrace is dropped on purpose: it is large.
+func exceptionAttrs(span *tracepb.Span) map[string]string {
+	for _, ev := range span.GetEvents() {
+		if ev.GetName() != "exception" {
+			continue
+		}
+		out := map[string]string{}
+		for _, key := range []string{"exception.type", "exception.message"} {
+			if v := attrString(ev.GetAttributes(), key); v != "" {
+				out[key] = v
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// attrsJSON flattens span attributes to a JSON object. Extra entries
+// (exception info) only fill keys the span does not already have.
+func attrsJSON(attrs []*commonpb.KeyValue, extra map[string]string) string {
+	if len(attrs) == 0 && len(extra) == 0 {
 		return "{}"
 	}
-	m := make(map[string]string, len(attrs))
+	m := make(map[string]string, len(attrs)+len(extra))
 	for _, kv := range attrs {
 		m[kv.GetKey()] = anyValueString(kv.GetValue())
+	}
+	for k, v := range extra {
+		if _, ok := m[k]; !ok {
+			m[k] = v
+		}
 	}
 	out, err := json.Marshal(m)
 	if err != nil {

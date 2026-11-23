@@ -20,6 +20,41 @@ func (q *Queries) CountSpans(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSpansByService = `-- name: CountSpansByService :many
+SELECT service, COUNT(*) AS spans
+FROM spans
+GROUP BY service
+ORDER BY spans DESC, service
+`
+
+type CountSpansByServiceRow struct {
+	Service string
+	Spans   int64
+}
+
+func (q *Queries) CountSpansByService(ctx context.Context) ([]CountSpansByServiceRow, error) {
+	rows, err := q.db.QueryContext(ctx, countSpansByService)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountSpansByServiceRow
+	for rows.Next() {
+		var i CountSpansByServiceRow
+		if err := rows.Scan(&i.Service, &i.Spans); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteAllSpans = `-- name: DeleteAllSpans :exec
 DELETE FROM spans
 `
@@ -82,6 +117,7 @@ INSERT INTO spans (
     start_ns, duration_ns, status_code, status_message,
     http_method, http_route, http_status, db_system, db_statement, attrs
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (trace_id, span_id) DO NOTHING
 `
 
 type InsertSpanParams struct {
@@ -187,7 +223,7 @@ func (q *Queries) ListEndpoints(ctx context.Context, startNs int64) ([]ListEndpo
 
 const listErrorSpans = `-- name: ListErrorSpans :many
 SELECT trace_id, service, name, status_message, http_route,
-    start_ns, duration_ns
+    start_ns, duration_ns, attrs
 FROM spans
 WHERE status_code = 2 AND start_ns >= ?
 ORDER BY start_ns DESC
@@ -202,6 +238,7 @@ type ListErrorSpansRow struct {
 	HttpRoute     string
 	StartNs       int64
 	DurationNs    int64
+	Attrs         string
 }
 
 func (q *Queries) ListErrorSpans(ctx context.Context, startNs int64) ([]ListErrorSpansRow, error) {
@@ -221,6 +258,7 @@ func (q *Queries) ListErrorSpans(ctx context.Context, startNs int64) ([]ListErro
 			&i.HttpRoute,
 			&i.StartNs,
 			&i.DurationNs,
+			&i.Attrs,
 		); err != nil {
 			return nil, err
 		}
@@ -403,6 +441,8 @@ type ListSlowQueriesRow struct {
 	ExampleTrace string
 }
 
+// With exactly one MAX() in the query, SQLite takes bare columns
+// (example_trace) from the row that holds the max. AVG/COUNT do not count.
 func (q *Queries) ListSlowQueries(ctx context.Context, startNs int64) ([]ListSlowQueriesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSlowQueries, startNs)
 	if err != nil {
